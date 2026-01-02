@@ -12,6 +12,7 @@ import { WorktreeCard } from '@/components/worktree-card';
 import { CreateWorktreeDialog } from '@/components/create-worktree-dialog';
 import { RenameDialog } from '@/components/rename-dialog';
 import { OpenCodePanel } from '@/components/opencode-panel';
+import { AgentManagerView } from '@/components/agent-manager/agent-manager-view';
 import { isProtectedBranch } from '@/lib/branch-colors';
 import type { WorktreeMetadata } from '@/store/types';
 
@@ -25,6 +26,7 @@ function App() {
     removeWorktree,
     lockWorktree,
     unlockWorktree,
+    activeView,
     error,
   } = useAppStore();
 
@@ -105,82 +107,88 @@ function App() {
     <div className="flex h-screen flex-col bg-background">
       <Header onAddRepository={handleAddRepository} />
 
-      <div className="flex flex-1 overflow-hidden">
-        <RepositorySidebar
-          onSelectRepository={handleSelectRepository}
-          onRemoveRepository={handleRemoveRepository}
-        />
+      {activeView === 'worktrees' ? (
+        // Worktrees View
+        <div className="flex flex-1 overflow-hidden">
+          <RepositorySidebar
+            onSelectRepository={handleSelectRepository}
+            onRemoveRepository={handleRemoveRepository}
+          />
 
-        <main className="flex-1 overflow-hidden">
-          {selectedRepo ? (
-            <div className="flex h-full flex-col">
-              <div className="border-b bg-card px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <FolderGit2 className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <h2 className="font-medium">{selectedRepo.name}</h2>
-                      <p className="text-sm text-muted-foreground">
-                        {selectedRepo.worktrees.length} worktree{selectedRepo.worktrees.length !== 1 ? 's' : ''}
-                      </p>
+          <main className="flex-1 overflow-hidden">
+            {selectedRepo ? (
+              <div className="flex h-full flex-col">
+                <div className="border-b bg-card px-6 py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <FolderGit2 className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <h2 className="font-medium">{selectedRepo.name}</h2>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedRepo.worktrees.length} worktree{selectedRepo.worktrees.length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <Button onClick={() => setCreateDialogOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Worktree
-                  </Button>
-                </div>
-              </div>
-
-              <ScrollArea className="flex-1 p-6">
-                {selectedRepo.worktrees.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center text-center">
-                    <div className="mb-4 rounded-full bg-secondary/30 p-4">
-                      <FolderGit2 className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <h3 className="mb-2 text-lg font-medium">No worktrees yet</h3>
-                    <p className="mb-4 text-sm text-muted-foreground">
-                      Create your first worktree to start managing multiple branches.
-                    </p>
                     <Button onClick={() => setCreateDialogOpen(true)}>
                       <Plus className="mr-2 h-4 w-4" />
-                      Create Worktree
+                      New Worktree
                     </Button>
                   </div>
-                ) : (
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {selectedRepo.worktrees.map((worktree) => (
-                      <WorktreeCard
-                        key={worktree.id}
-                        worktree={worktree}
-                        onRename={handleRename}
-                        onDelete={handleDelete}
-                        onLock={handleLock}
-                        onUnlock={handleUnlock}
-                      />
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            </div>
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <div className="mb-6 rounded-full bg-primary/10 p-6">
-                <FolderGit2 className="h-12 w-12 text-primary" />
+                </div>
+
+                <ScrollArea className="flex-1 p-6">
+                  {selectedRepo.worktrees.length === 0 ? (
+                    <div className="flex h-full flex-col items-center justify-center text-center">
+                      <div className="mb-4 rounded-full bg-secondary/30 p-4">
+                        <FolderGit2 className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                      <h3 className="mb-2 text-lg font-medium">No worktrees yet</h3>
+                      <p className="mb-4 text-sm text-muted-foreground">
+                        Create your first worktree to start managing multiple branches.
+                      </p>
+                      <Button onClick={() => setCreateDialogOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Worktree
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {selectedRepo.worktrees.map((worktree) => (
+                        <WorktreeCard
+                          key={worktree.id}
+                          worktree={worktree}
+                          onRename={handleRename}
+                          onDelete={handleDelete}
+                          onLock={handleLock}
+                          onUnlock={handleUnlock}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
               </div>
-              <h2 className="mb-2 text-xl font-semibold">Welcome to Aristar Worktrees</h2>
-              <p className="mb-6 max-w-md text-muted-foreground">
-                Add a Git repository to start managing your worktrees.
-                Create, organize, and navigate between worktrees with ease.
-              </p>
-              <Button onClick={handleAddRepository} size="lg">
-                <FolderGit2 className="mr-2 h-5 w-5" />
-                Add Repository
-              </Button>
-            </div>
-          )}
-        </main>
-      </div>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <div className="mb-6 rounded-full bg-primary/10 p-6">
+                  <FolderGit2 className="h-12 w-12 text-primary" />
+                </div>
+                <h2 className="mb-2 text-xl font-semibold">Welcome to Aristar Worktrees</h2>
+                <p className="mb-6 max-w-md text-muted-foreground">
+                  Add a Git repository to start managing your worktrees.
+                  Create, organize, and navigate between worktrees with ease.
+                </p>
+                <Button onClick={handleAddRepository} size="lg">
+                  <FolderGit2 className="mr-2 h-5 w-5" />
+                  Add Repository
+                </Button>
+              </div>
+            )}
+          </main>
+        </div>
+      ) : (
+        // Agent Manager View
+        <AgentManagerView />
+      )}
 
       {error && (
         <div className="border-t bg-destructive/10 px-6 py-2 text-sm text-destructive">

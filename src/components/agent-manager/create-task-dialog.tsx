@@ -1,0 +1,302 @@
+import { useState, useEffect, useCallback } from 'react';
+import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { SourceSelector } from '@/components/agent-manager/source-selector';
+import { ModelSelector, SelectedModelsList } from '@/components/agent-manager/model-selector';
+import { AgentTypeSelector } from '@/components/agent-manager/agent-type-selector';
+import { useAppStore } from '@/store/use-app-store';
+import { useAgentManagerStore } from '@/store/agent-manager-store';
+import { opencodeClient } from '@/lib/opencode';
+import * as commands from '@/lib/commands';
+import type { CommitInfo, SourceType, ModelSelection } from '@/store/types';
+
+interface CreateTaskDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) {
+  const { repositories, selectedRepositoryId, setSelectedRepository } = useAppStore();
+  const {
+    createTask,
+    startTask,
+    providers,
+    availableAgents,
+    loadProviders,
+    loadAvailableAgents,
+  } = useAgentManagerStore();
+
+  const [name, setName] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [sourceType, setSourceType] = useState<SourceType>('current-branch');
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [selectedCommit, setSelectedCommit] = useState<CommitInfo | null>(null);
+  const [selectedModels, setSelectedModels] = useState<ModelSelection[]>([]);
+  const [agentType, setAgentType] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [loadingProviders, setLoadingProviders] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedRepo = repositories.find((r) => r.id === selectedRepositoryId);
+
+  // Load providers when dialog opens and we have a selected repo
+  const loadOpenCodeData = useCallback(async () => {
+    if (!selectedRepo) return;
+    
+    setLoadingProviders(true);
+    try {
+      // Start a temporary OpenCode server to fetch providers/agents
+      const port = await commands.startOpencode(selectedRepo.path);
+      opencodeClient.connect(port);
+      
+      await loadProviders(port);
+      await loadAvailableAgents(port);
+      
+      // Set default agent type if we have agents
+      const agents = useAgentManagerStore.getState().availableAgents;
+      if (agents.length > 0 && !agentType) {
+        // Find 'coder' or use first available
+        const defaultAgent = agents.find(a => a.id === 'coder') || agents[0];
+        setAgentType(defaultAgent.id);
+      }
+    } catch (err) {
+      console.error('Failed to load OpenCode data:', err);
+      setError('Failed to load models. Make sure OpenCode is installed.');
+    } finally {
+      setLoadingProviders(false);
+    }
+  }, [selectedRepo, loadProviders, loadAvailableAgents, agentType]);
+
+  useEffect(() => {
+    if (open && selectedRepo && providers.length === 0) {
+      loadOpenCodeData();
+    }
+  }, [open, selectedRepo, providers.length, loadOpenCodeData]);
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      setName('');
+      setPrompt('');
+      setSourceType('current-branch');
+      setSelectedBranch('');
+      setSelectedCommit(null);
+      setSelectedModels([]);
+      setError(null);
+    }
+  }, [open]);
+
+  const handleNameChange = (value: string) => {
+    const sanitized = value.replace(/[^a-zA-Z0-9_-\s]/g, '-');
+    setName(sanitized);
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedRepo) {
+      setError('Please select a repository');
+      return;
+    }
+    if (!name.trim()) {
+      setError('Please enter a task name');
+      return;
+    }
+    if (selectedModels.length === 0) {
+      setError('Please select at least one model');
+      return;
+    }
+    if (!prompt.trim()) {
+      setError('Please enter an initial prompt');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Determine source branch/commit
+      let sourceBranch: string | undefined;
+      let sourceCommit: string | undefined;
+
+      if (sourceType === 'existing-branch') {
+        sourceBranch = selectedBranch;
+      } else if (sourceType === 'commit') {
+        sourceCommit = selectedCommit?.hash;
+      }
+      // For 'current-branch', we don't pass either - backend will use current
+
+      // Create the task
+      const task = await createTask({
+        name: name.trim(),
+        sourceType: sourceType === 'commit' ? 'commit' : 'branch',
+        sourceBranch,
+        sourceCommit,
+        sourceRepoPath: selectedRepo.path,
+        agentType: agentType || 'coder',
+        models: selectedModels,
+      });
+
+      // Start the task with the initial prompt
+      await startTask(task.id, prompt.trim());
+
+      onOpenChange(false);
+    } catch (err) {
+      console.error('Failed to create task:', err);
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveModel = (model: ModelSelection) => {
+    setSelectedModels(
+      selectedModels.filter(
+        (m) => !(m.providerId === model.providerId && m.modelId === model.modelId)
+      )
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle>Create New Task</DialogTitle>
+          <DialogDescription>
+            Create a task with multiple AI agents working in parallel
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 py-4">
+          {/* Repository selector (if multiple repos) */}
+          {repositories.length > 1 && (
+            <div className="space-y-2">
+              <Label>Repository</Label>
+              <Select
+                value={selectedRepositoryId || ''}
+                onValueChange={setSelectedRepository}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a repository" />
+                </SelectTrigger>
+                <SelectContent>
+                  {repositories.map((repo) => (
+                    <SelectItem key={repo.id} value={repo.id}>
+                      {repo.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Task name */}
+          <div className="space-y-2">
+            <Label htmlFor="task-name">Task Name</Label>
+            <Input
+              id="task-name"
+              placeholder="e.g., Refactor Authentication"
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+            />
+          </div>
+
+          {/* Source selector */}
+          {selectedRepo && (
+            <SourceSelector
+              repoPath={selectedRepo.path}
+              sourceType={sourceType}
+              onSourceTypeChange={setSourceType}
+              selectedBranch={selectedBranch}
+              onBranchChange={setSelectedBranch}
+              selectedCommit={selectedCommit}
+              onCommitChange={setSelectedCommit}
+            />
+          )}
+
+          {/* Agent type selector */}
+          <div className="space-y-2">
+            <Label>Agent Type</Label>
+            <AgentTypeSelector
+              agents={availableAgents}
+              value={agentType}
+              onChange={setAgentType}
+              isLoading={loadingProviders}
+            />
+          </div>
+
+          {/* Model selector */}
+          <div className="space-y-2">
+            <Label>Models</Label>
+            <ModelSelector
+              providers={providers}
+              selectedModels={selectedModels}
+              onChange={setSelectedModels}
+              isLoading={loadingProviders}
+            />
+            <SelectedModelsList
+              providers={providers}
+              selectedModels={selectedModels}
+              onRemove={handleRemoveModel}
+            />
+          </div>
+
+          {/* Initial prompt */}
+          <div className="space-y-2">
+            <Label htmlFor="prompt">Initial Prompt</Label>
+            <Textarea
+              id="prompt"
+              placeholder="Describe what you want the agents to do..."
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              rows={6}
+              className="resize-none"
+            />
+          </div>
+
+          {/* Error display */}
+          {error && (
+            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={
+              loading ||
+              !name.trim() ||
+              selectedModels.length === 0 ||
+              !prompt.trim() ||
+              !selectedRepo
+            }
+          >
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Create & Run
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

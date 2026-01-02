@@ -50,6 +50,8 @@ export interface StoreData {
 
 export type SourceType = 'current-branch' | 'existing-branch' | 'commit';
 
+export type ActiveView = 'worktrees' | 'agent-manager';
+
 export interface BranchInfo {
   name: string;
   isCurrent: boolean;

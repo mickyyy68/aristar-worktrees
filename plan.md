@@ -357,35 +357,35 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
 ## Phase 6: UI Components - Core
 
 ### 6.1 Install Dependencies
-- [ ] Install markdown rendering: `bun add react-markdown remark-gfm`
-- [ ] Install syntax highlighting: `bun add react-syntax-highlighter @types/react-syntax-highlighter`
+- [x] Install markdown rendering: `bun add react-markdown remark-gfm`
+- [x] Install syntax highlighting: `bun add react-syntax-highlighter @types/react-syntax-highlighter`
 
 ### 6.2 App Layout & Navigation
-- [ ] Update `src/components/header.tsx`:
+- [x] Update `src/components/header.tsx`:
   - Add view toggle: `[Worktrees] [Agent Manager]`
   - Store active view in app state
 
-- [ ] Update `src/App.tsx`:
+- [x] Update `src/App.tsx`:
   - Add routing/conditional rendering based on active view
   - Render `<WorktreesView />` or `<AgentManagerView />`
 
 ### 6.3 Create Base Components
-- [ ] Create `src/components/ui/markdown-renderer.tsx`:
+- [x] Create `src/components/ui/markdown-renderer.tsx`:
   - Render markdown with syntax highlighting
   - Support code blocks with copy button
   - Handle inline code, links, lists, etc.
 
-- [ ] Create `src/components/agent-manager/status-badge.tsx`:
+- [x] Create `src/components/agent-manager/status-badge.tsx`:
   - Display status with appropriate icon and color
   - Statuses: running (green pulse), paused (yellow), completed (green check), failed (red), idle (gray)
 
-- [ ] Create `src/components/agent-manager/model-selector.tsx`:
+- [x] Create `src/components/agent-manager/model-selector.tsx`:
   - Multi-select dropdown for models
   - Group by provider
   - Search/filter capability
   - Show checkboxes for each model
 
-- [ ] Create `src/components/agent-manager/agent-type-selector.tsx`:
+- [x] Create `src/components/agent-manager/agent-type-selector.tsx`:
   - Single-select dropdown for agent type (Build, Plan, etc.)
   - Fetches from OpenCode `/agent` endpoint
 
@@ -394,7 +394,7 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
 ## Phase 7: UI Components - Agent Manager Page
 
 ### 7.1 Main Layout
-- [ ] Create `src/components/agent-manager/agent-manager-view.tsx`:
+- [x] Create `src/components/agent-manager/agent-manager-view.tsx`:
   ```
   ┌─────────────────────────────────────────────────────────────────┐
   │                           HEADER                                 │
@@ -407,7 +407,7 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
   ```
 
 ### 7.2 Task List Sidebar
-- [ ] Create `src/components/agent-manager/task-list-sidebar.tsx`:
+- [x] Create `src/components/agent-manager/task-list-sidebar.tsx`:
   - "New Task" button at top
   - List of all tasks with:
     - Task name
@@ -417,26 +417,26 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
   - Active task highlighted
 
 ### 7.3 Task Detail Area (Empty State)
-- [ ] Create `src/components/agent-manager/task-empty-state.tsx`:
+- [x] Create `src/components/agent-manager/task-empty-state.tsx`:
   - Shown when no task is selected
   - Prompt to create new task or select existing
 
 ### 7.4 Task Detail Area (With Task)
-- [ ] Create `src/components/agent-manager/task-detail.tsx`:
+- [x] Create `src/components/agent-manager/task-detail.tsx`:
   - Task header: name, source branch, agent count, status
   - Agent tabs: one tab per agent (model name + status)
   - Active agent's chat view
   - Input area at bottom
 
 ### 7.5 Agent Tabs
-- [ ] Create `src/components/agent-manager/agent-tabs.tsx`:
+- [x] Create `src/components/agent-manager/agent-tabs.tsx`:
   - Horizontal tabs showing all agents for current task
   - Each tab shows: model name, status badge
   - Click to switch active agent
   - Visual indicator for accepted agent
 
 ### 7.6 Chat View
-- [ ] Create `src/components/agent-manager/chat-view.tsx`:
+- [x] Create `src/components/agent-manager/chat-view.tsx`:
   - Scrollable message list
   - User messages (right-aligned)
   - Assistant messages (left-aligned, with markdown)
@@ -444,18 +444,18 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
   - Tool call indicators (expandable)
 
 ### 7.7 Message Components
-- [ ] Create `src/components/agent-manager/chat-message.tsx`:
+- [x] Create `src/components/agent-manager/chat-message.tsx`:
   - Render single message
   - Different styles for user/assistant
   - Markdown rendering for assistant messages
   - Timestamp display
 
-- [ ] Create `src/components/agent-manager/tool-call-display.tsx`:
+- [x] Create `src/components/agent-manager/tool-call-display.tsx`:
   - Collapsible display for tool calls
   - Show tool name, arguments, result
 
 ### 7.8 Input Area
-- [ ] Create `src/components/agent-manager/chat-input.tsx`:
+- [x] Create `src/components/agent-manager/chat-input.tsx`:
   - Text input (expandable textarea)
   - Send button
   - Agent type selector (inline)
@@ -463,7 +463,7 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
   - Option to send to all agents or just active
 
 ### 7.9 Agent Actions
-- [ ] Create `src/components/agent-manager/agent-actions.tsx`:
+- [x] Create `src/components/agent-manager/agent-actions.tsx`:
   - Buttons for active agent:
     - Pause/Resume
     - Stop
@@ -478,7 +478,7 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
 ## Phase 8: UI Components - New Task Dialog
 
 ### 8.1 Create Task Dialog
-- [ ] Create `src/components/agent-manager/create-task-dialog.tsx`:
+- [x] Create `src/components/agent-manager/create-task-dialog.tsx`:
   - Cursor-style centered input area
   - Fields:
     - Task name (auto-generated from prompt if empty)
@@ -490,7 +490,7 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
   - Create & Run button
 
 ### 8.2 Source Selection Component
-- [ ] Create `src/components/agent-manager/source-selector.tsx`:
+- [x] Create `src/components/agent-manager/source-selector.tsx`:
   - Reuse logic from existing create-worktree-dialog
   - Radio: Current Branch | Existing Branch | Specific Commit
   - Branch dropdown (when applicable)

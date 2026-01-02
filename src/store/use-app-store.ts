@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Repository, AppSettings } from '@/store/types';
+import type { Repository, AppSettings, ActiveView } from '@/store/types';
 import * as commands from '@/lib/commands';
 import { opencodeClient, type OpenCodeMessage } from '@/lib/opencode';
 
@@ -27,6 +27,7 @@ interface AppState {
   repositories: Repository[];
   settings: AppSettings;
   selectedRepositoryId: string | null;
+  activeView: ActiveView;
   isLoading: boolean;
   error: string | null;
   
@@ -34,6 +35,7 @@ interface AppState {
   
   setSettings: (settings: Partial<AppSettings>) => void;
   setSelectedRepository: (id: string | null) => void;
+  setActiveView: (view: ActiveView) => void;
   
   loadRepositories: () => Promise<void>;
   addRepository: (path: string) => Promise<void>;
@@ -75,8 +77,13 @@ export const useAppStore = create<AppState>()(
       repositories: [],
       settings: defaultSettings,
       selectedRepositoryId: null,
+      activeView: 'worktrees',
       isLoading: false,
       error: null,
+
+      setActiveView: (view) => {
+        set({ activeView: view });
+      },
 
       setSettings: (newSettings) => {
         set((state) => ({
@@ -422,6 +429,7 @@ export const useAppStore = create<AppState>()(
         repositories: state.repositories,
         settings: state.settings,
         selectedRepositoryId: state.selectedRepositoryId,
+        activeView: state.activeView,
       }),
     }
   )
