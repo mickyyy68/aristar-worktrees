@@ -5,4 +5,5 @@
 
 mod commands;
 
+pub use commands::opencode_manager::OpenCodeManager;
 pub use commands::{init_store, AppState};

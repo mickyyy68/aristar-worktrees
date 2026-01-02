@@ -86,3 +86,19 @@ export async function revealInFinder(path: string): Promise<void> {
 export async function copyToClipboard(text: string): Promise<void> {
   return await invoke('copy_to_clipboard', { text });
 }
+
+export async function startOpencode(worktreePath: string): Promise<number> {
+  return await invoke('start_opencode', { worktreePath });
+}
+
+export async function stopOpencode(worktreePath: string): Promise<void> {
+  return await invoke('stop_opencode', { worktreePath });
+}
+
+export async function getOpencodeStatus(worktreePath: string): Promise<number | null> {
+  return await invoke('get_opencode_status', { worktreePath });
+}
+
+export async function isOpencodeRunning(worktreePath: string): Promise<boolean> {
+  return await invoke('is_opencode_running', { worktreePath });
+}

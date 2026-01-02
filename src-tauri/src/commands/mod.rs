@@ -5,11 +5,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::State;
 
+pub mod opencode_manager;
 pub mod worktree;
 
 #[cfg(test)]
 mod tests;
 
+pub use opencode_manager::OpenCodeManager;
 use worktree::{CommitInfo, Repository, StoreData, WorktreeInfo};
 
 fn get_store_path() -> PathBuf {
@@ -306,6 +308,33 @@ pub fn reveal_in_finder(path: String) -> Result<(), String> {
 #[tauri::command]
 pub fn copy_to_clipboard(text: String) -> Result<(), String> {
     worktree::copy_to_clipboard(&text)
+}
+
+#[tauri::command]
+pub fn start_opencode(state: State<OpenCodeManager>, worktree_path: String) -> Result<u16, String> {
+    let path = PathBuf::from(worktree_path);
+    state.start(path)
+}
+
+#[tauri::command]
+pub fn stop_opencode(state: State<OpenCodeManager>, worktree_path: String) -> Result<(), String> {
+    let path = PathBuf::from(worktree_path);
+    state.stop(&path)
+}
+
+#[tauri::command]
+pub fn get_opencode_status(
+    state: State<OpenCodeManager>,
+    worktree_path: String,
+) -> Result<Option<u16>, String> {
+    let path = PathBuf::from(worktree_path);
+    state.get_port(&path)
+}
+
+#[tauri::command]
+pub fn is_opencode_running(state: State<OpenCodeManager>, worktree_path: String) -> bool {
+    let path = PathBuf::from(worktree_path);
+    state.is_running(&path)
 }
 
 pub fn init_store() -> AppState {

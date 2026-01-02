@@ -11,6 +11,7 @@ import { RepositorySidebar } from '@/components/repository-sidebar';
 import { WorktreeCard } from '@/components/worktree-card';
 import { CreateWorktreeDialog } from '@/components/create-worktree-dialog';
 import { RenameDialog } from '@/components/rename-dialog';
+import { OpenCodePanel } from '@/components/opencode-panel';
 import { isProtectedBranch } from '@/lib/branch-colors';
 import type { WorktreeMetadata } from '@/store/types';
 
@@ -271,6 +272,8 @@ function App() {
           </div>
         </div>
       )}
+
+      <OpenCodePanel />
     </div>
   );
 }

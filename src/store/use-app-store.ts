@@ -2,6 +2,26 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Repository, AppSettings } from '@/store/types';
 import * as commands from '@/lib/commands';
+import { opencodeClient, type OpenCodeMessage } from '@/lib/opencode';
+
+interface OpenCodeState {
+  isOpencodePanelOpen: boolean;
+  activeWorktreePath: string | null;
+  opencodePort: number | null;
+  sessionId: string | null;
+  isConnected: boolean;
+  isLoading: boolean;
+  error: string | null;
+  messages: OpenCodeMessage[];
+}
+
+interface OpenCodeActions {
+  openOpencodePanel: (worktreePath: string) => Promise<void>;
+  closeOpencodePanel: () => Promise<void>;
+  sendToOpencode: (prompt: string) => Promise<void>;
+  clearOpencodeMessages: () => void;
+  clearOpencodeError: () => void;
+}
 
 interface AppState {
   repositories: Repository[];
@@ -9,6 +29,8 @@ interface AppState {
   selectedRepositoryId: string | null;
   isLoading: boolean;
   error: string | null;
+  
+  opencode: OpenCodeState & OpenCodeActions;
   
   setSettings: (settings: Partial<AppSettings>) => void;
   setSelectedRepository: (id: string | null) => void;
@@ -262,6 +284,136 @@ export const useAppStore = create<AppState>()(
 
       clearError: () => {
         set({ error: null });
+      },
+
+      opencode: {
+        isOpencodePanelOpen: false,
+        activeWorktreePath: null,
+        opencodePort: null,
+        sessionId: null,
+        isConnected: false,
+        isLoading: false,
+        error: null,
+        messages: [],
+
+        openOpencodePanel: async (worktreePath) => {
+          set((state) => ({ opencode: { ...state.opencode, isLoading: true, error: null } }));
+          try {
+            console.log('[opencode] Starting OpenCode for worktree:', worktreePath);
+            const port = await commands.startOpencode(worktreePath);
+            opencodeClient.connect(port);
+
+            const sessions = await opencodeClient.listSessions();
+            let sessionId = sessions[0]?.id || null;
+
+            if (!sessionId) {
+              const session = await opencodeClient.createSession('Aristar Worktrees');
+              sessionId = session.id;
+            } else {
+              opencodeClient.setSession(sessionId);
+            }
+
+            const messages = await opencodeClient.getSessionMessages();
+
+            set((state) => ({
+              opencode: {
+                ...state.opencode,
+                isOpencodePanelOpen: true,
+                activeWorktreePath: worktreePath,
+                opencodePort: port,
+                sessionId,
+                isConnected: true,
+                isLoading: false,
+                messages,
+                error: null,
+              },
+            }));
+            console.log('[opencode] Connected on port', port, 'with session', sessionId);
+          } catch (err) {
+            console.error('[opencode] Failed to start:', err);
+            set((state) => ({
+              opencode: { ...state.opencode, isLoading: false, error: String(err) },
+            }));
+          }
+        },
+
+        closeOpencodePanel: async () => {
+          const { opencode } = get();
+          if (opencode.activeWorktreePath) {
+            try {
+              await commands.stopOpencode(opencode.activeWorktreePath);
+            } catch (err) {
+              console.error('[opencode] Error stopping server:', err);
+            }
+          }
+          opencodeClient.disconnect();
+          set((state) => ({
+            opencode: {
+              ...state.opencode,
+              isOpencodePanelOpen: false,
+              activeWorktreePath: null,
+              opencodePort: null,
+              sessionId: null,
+              isConnected: false,
+              messages: [],
+            },
+          }));
+        },
+
+        sendToOpencode: async (prompt) => {
+          const { opencode } = get();
+          if (!opencode.isConnected || !opencode.sessionId) {
+            throw new Error('OpenCode not connected');
+          }
+
+          const userMessage: OpenCodeMessage = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: prompt,
+            timestamp: new Date(),
+          };
+
+          set((state) => ({
+            opencode: {
+              ...state.opencode,
+              messages: [...state.opencode.messages, userMessage],
+              isLoading: true,
+            },
+          }));
+
+          try {
+            const response = await opencodeClient.sendPrompt(prompt);
+
+            set((state) => ({
+              opencode: {
+                ...state.opencode,
+                messages: [...state.opencode.messages, response],
+                isLoading: false,
+              },
+            }));
+          } catch (err) {
+            set((state) => ({
+              opencode: {
+                ...state.opencode,
+                isLoading: false,
+                error: String(err),
+              },
+            }));
+            throw err;
+          }
+        },
+
+        clearOpencodeMessages: () => {
+          set((state) => ({
+            opencode: { ...state.opencode, messages: [] },
+          }));
+        },
+
+        clearOpencodeError: () => {
+          set((state) => ({
+            opencode: { ...state.opencode, error: null },
+          }));
+        },
       },
     }),
     {
