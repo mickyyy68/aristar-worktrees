@@ -65,8 +65,8 @@ export function WorktreeCard({
   };
 
   return (
-    <Card className="group relative overflow-hidden transition-all hover:shadow-md">
-      <CardContent className="p-4">
+    <Card className="group relative min-w-[360px] overflow-hidden transition-all hover:shadow-md">
+      <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
             <div 
@@ -80,7 +80,7 @@ export function WorktreeCard({
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <h3 className="font-medium truncate max-w-[180px]">
+                <h3 className="font-medium truncate max-w-[240px]">
                   {worktree.name}
                 </h3>
                 {worktree.isMain && (
@@ -187,6 +187,21 @@ export function WorktreeCard({
               </Button>
             </TooltipTrigger>
             <TooltipContent>Open terminal in worktree</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openInEditor(worktree.path)}
+                className="flex-1"
+              >
+                <Code2 className="mr-2 h-3.5 w-3.5" />
+                Editor
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Open editor in worktree</TooltipContent>
           </Tooltip>
 
           <Tooltip>
