@@ -2,6 +2,13 @@
 
 A beautiful Tauri application for managing Git worktrees with a modern UI.
 
+![Aristar Worktrees](src/assets/readme/app-home.png)
+
+> **macOS Note:** If you see "Aristar Worktrees is damaged and can't be opened", run:
+> ```bash
+> xattr -cr /Applications/Aristar\ Worktrees.app
+> ```
+
 ## Features
 
 - **Multiple Repository Support**: Add and manage worktrees across multiple Git repositories
