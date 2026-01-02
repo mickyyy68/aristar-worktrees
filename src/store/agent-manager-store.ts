@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { toast } from 'sonner';
 import type {
   Task,
   OpenCodeProvider,
@@ -11,6 +12,7 @@ import type {
 import type { OpenCodeMessage } from '@/lib/opencode';
 import { opencodeClient } from '@/lib/opencode';
 import * as commands from '@/lib/commands';
+import { sendMessageAsync } from '@/lib/use-agent-sse';
 
 // ============ State Interface ============
 
@@ -34,6 +36,9 @@ interface AgentManagerState {
 
   // OpenCode connection state per agent
   agentOpencodePorts: Record<string, number>; // agentId -> port
+
+  // Orphaned agents (worktree missing)
+  orphanedAgents: Record<string, string[]>; // taskId -> agentIds with missing worktrees
 }
 
 // ============ Actions Interface ============
@@ -77,6 +82,14 @@ interface AgentManagerActions {
   // Error handling
   clearError: () => void;
   setError: (error: string) => void;
+
+  // Orphaned agent handling
+  validateTaskWorktrees: (taskId: string) => Promise<string[]>;
+  recreateAgentWorktree: (taskId: string, agentId: string) => Promise<void>;
+  isAgentOrphaned: (taskId: string, agentId: string) => boolean;
+
+  // OpenCode server recovery
+  recoverTaskAgents: (taskId: string) => Promise<void>;
 }
 
 type AgentManagerStore = AgentManagerState & AgentManagerActions;
@@ -97,6 +110,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
       agentMessages: {},
       agentLoading: {},
       agentOpencodePorts: {},
+      orphanedAgents: {},
 
       // ============ Task CRUD ============
 
@@ -105,8 +119,29 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
         try {
           const tasks = await commands.getTasks();
           set({ tasks, isLoading: false });
+          
+          // Validate worktrees for all tasks
+          const orphanedAgents: Record<string, string[]> = {};
+          for (const task of tasks) {
+            const orphanedIds = await commands.validateTaskWorktrees(task.id);
+            if (orphanedIds.length > 0) {
+              orphanedAgents[task.id] = orphanedIds;
+            }
+          }
+          
+          set({ orphanedAgents });
+          
+          // Show warning if there are orphaned agents
+          const totalOrphaned = Object.values(orphanedAgents).flat().length;
+          if (totalOrphaned > 0) {
+            toast.warning('Orphaned agents detected', {
+              description: `${totalOrphaned} agent(s) have missing worktrees`,
+            });
+          }
         } catch (err) {
-          set({ error: String(err), isLoading: false });
+          const errorMsg = String(err);
+          set({ error: errorMsg, isLoading: false });
+          toast.error('Failed to load tasks', { description: errorMsg });
         }
       },
 
@@ -128,9 +163,12 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
             activeAgentId: task.agents[0]?.id || null,
             isLoading: false,
           }));
+          toast.success('Task created', { description: task.name });
           return task;
         } catch (err) {
-          set({ error: String(err), isLoading: false });
+          const errorMsg = String(err);
+          set({ error: errorMsg, isLoading: false });
+          toast.error('Failed to create task', { description: errorMsg });
           throw err;
         }
       },
@@ -148,8 +186,11 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
             activeAgentId: state.activeTaskId === taskId ? null : state.activeAgentId,
             isLoading: false,
           }));
+          toast.success('Task deleted');
         } catch (err) {
-          set({ error: String(err), isLoading: false });
+          const errorMsg = String(err);
+          set({ error: errorMsg, isLoading: false });
+          toast.error('Failed to delete task', { description: errorMsg });
         }
       },
 
@@ -216,8 +257,11 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
             ),
             isLoading: false,
           }));
+          toast.success('Agent accepted');
         } catch (err) {
-          set({ error: String(err), isLoading: false });
+          const errorMsg = String(err);
+          set({ error: errorMsg, isLoading: false });
+          toast.error('Failed to accept agent', { description: errorMsg });
         }
       },
 
@@ -323,42 +367,23 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
             },
           }));
 
-          // Send the prompt with model info
+          // Send the prompt asynchronously - response will come via SSE
           const modelString = `${agent.providerId}/${agent.modelId}`;
-          const response = await opencodeClient.sendPromptWithOptions(initialPrompt, {
+          await sendMessageAsync(port, sessionId, initialPrompt, {
             model: modelString,
             agent: agent.agentType || task.agentType,
           });
 
-          // Add response
-          set((state) => ({
-            agentMessages: {
-              ...state.agentMessages,
-              [agentId]: [...(state.agentMessages[agentId] || []), response],
-            },
-            agentLoading: { ...state.agentLoading, [agentId]: false },
-          }));
-
-          // Update agent status to completed
-          await commands.updateAgentStatus(taskId, agentId, 'completed' as AgentStatus);
-          set((state) => ({
-            tasks: state.tasks.map((t) =>
-              t.id === taskId
-                ? {
-                    ...t,
-                    agents: t.agents.map((a) =>
-                      a.id === agentId ? { ...a, status: 'completed' as AgentStatus } : a
-                    ),
-                  }
-                : t
-            ),
-          }));
+          // Note: Loading state will be managed by SSE hook when message.completed arrives
+          // Status will be updated when task is manually stopped or all agents complete
         } catch (err) {
           console.error(`[AgentManager] Failed to start agent ${agentId}:`, err);
+          const errorMsg = String(err);
           set((state) => ({
             agentLoading: { ...state.agentLoading, [agentId]: false },
-            error: String(err),
+            error: errorMsg,
           }));
+          toast.error('Failed to start agent', { description: errorMsg });
 
           // Update agent status to failed
           try {
@@ -517,10 +542,6 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           }));
 
           try {
-            // Connect to the right server
-            opencodeClient.connect(port);
-            opencodeClient.setSession(agent.sessionId);
-
             // Add user message
             const userMessage: OpenCodeMessage = {
               id: Date.now().toString(),
@@ -536,23 +557,21 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
               },
             }));
 
+            // Send asynchronously - response will come via SSE
             const modelString = `${agent.providerId}/${agent.modelId}`;
-            const response = await opencodeClient.sendPromptWithOptions(prompt, {
+            await sendMessageAsync(port, agent.sessionId, prompt, {
               model: modelString,
             });
 
-            set((state) => ({
-              agentMessages: {
-                ...state.agentMessages,
-                [agent.id]: [...(state.agentMessages[agent.id] || []), response],
-              },
-              agentLoading: { ...state.agentLoading, [agent.id]: false },
-            }));
+            // Note: Loading state will be managed by SSE hook when message.completed arrives
           } catch (err) {
             console.error(`[AgentManager] Failed to send follow-up to ${agent.id}:`, err);
+            const errorMsg = String(err);
             set((state) => ({
               agentLoading: { ...state.agentLoading, [agent.id]: false },
+              error: `Failed to send message: ${errorMsg}`,
             }));
+            toast.error('Failed to send message', { description: errorMsg });
           }
         }
       },
@@ -588,10 +607,76 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           activeTaskId: taskId,
           activeAgentId: task?.agents[0]?.id || null,
         });
+        
+        // Trigger recovery for agents with sessions but no running OpenCode
+        if (task) {
+          get().recoverTaskAgents(task.id);
+        }
       },
 
       setActiveAgent: (agentId) => {
         set({ activeAgentId: agentId });
+      },
+      
+      // ============ OpenCode Server Recovery ============
+      
+      recoverTaskAgents: async (taskId) => {
+        const { tasks, agentOpencodePorts, orphanedAgents } = get();
+        const task = tasks.find((t) => t.id === taskId);
+        if (!task) return;
+        
+        const orphanedIds = orphanedAgents[taskId] || [];
+        
+        for (const agent of task.agents) {
+          // Skip orphaned agents
+          if (orphanedIds.includes(agent.id)) continue;
+          
+          // Skip agents without sessions (never started)
+          if (!agent.sessionId) continue;
+          
+          // Check if OpenCode is already running
+          const existingPort = agentOpencodePorts[agent.id];
+          if (existingPort) continue;
+          
+          // Check if server is running via backend
+          try {
+            const port = await commands.getAgentOpencodePort(taskId, agent.id);
+            if (port) {
+              // Server is running, just store the port
+              set((state) => ({
+                agentOpencodePorts: { ...state.agentOpencodePorts, [agent.id]: port },
+              }));
+              
+              // Load messages from the session
+              opencodeClient.connect(port);
+              opencodeClient.setSession(agent.sessionId);
+              const messages = await opencodeClient.getSessionMessages();
+              set((state) => ({
+                agentMessages: { ...state.agentMessages, [agent.id]: messages },
+              }));
+            } else {
+              // Server not running, start it and restore session
+              const newPort = await commands.startAgentOpencode(taskId, agent.id);
+              set((state) => ({
+                agentOpencodePorts: { ...state.agentOpencodePorts, [agent.id]: newPort },
+              }));
+              
+              // Connect and restore session
+              opencodeClient.connect(newPort);
+              opencodeClient.setSession(agent.sessionId);
+              const messages = await opencodeClient.getSessionMessages();
+              set((state) => ({
+                agentMessages: { ...state.agentMessages, [agent.id]: messages },
+              }));
+              
+              toast.info('Session restored', {
+                description: `Reconnected to ${agent.modelId}`,
+              });
+            }
+          } catch (err) {
+            console.error(`[AgentManager] Failed to recover agent ${agent.id}:`, err);
+          }
+        }
       },
 
       // ============ Messages ============
@@ -641,6 +726,58 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
 
       setError: (error) => {
         set({ error });
+      },
+
+      // ============ Orphaned Agent Handling ============
+
+      validateTaskWorktrees: async (taskId) => {
+        try {
+          const orphanedIds = await commands.validateTaskWorktrees(taskId);
+          set((state) => ({
+            orphanedAgents: {
+              ...state.orphanedAgents,
+              [taskId]: orphanedIds,
+            },
+          }));
+          
+          if (orphanedIds.length > 0) {
+            toast.warning('Orphaned agents detected', {
+              description: `${orphanedIds.length} agent(s) have missing worktrees`,
+            });
+          }
+          
+          return orphanedIds;
+        } catch (err) {
+          console.error('[AgentManager] Failed to validate worktrees:', err);
+          return [];
+        }
+      },
+
+      recreateAgentWorktree: async (taskId, agentId) => {
+        try {
+          await commands.recreateAgentWorktree(taskId, agentId);
+          
+          // Remove from orphaned list
+          set((state) => ({
+            orphanedAgents: {
+              ...state.orphanedAgents,
+              [taskId]: (state.orphanedAgents[taskId] || []).filter((id) => id !== agentId),
+            },
+          }));
+          
+          toast.success('Worktree recreated', {
+            description: 'Agent worktree has been restored',
+          });
+        } catch (err) {
+          const errorMsg = String(err);
+          toast.error('Failed to recreate worktree', { description: errorMsg });
+          throw err;
+        }
+      },
+
+      isAgentOrphaned: (taskId, agentId) => {
+        const { orphanedAgents } = get();
+        return orphanedAgents[taskId]?.includes(agentId) || false;
       },
     }),
     {

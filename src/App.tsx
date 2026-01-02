@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { FolderGit2, Plus, AlertTriangle } from 'lucide-react';
+import { Toaster } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
@@ -282,6 +283,16 @@ function App() {
       )}
 
       <OpenCodePanel />
+      
+      {/* Toast notifications */}
+      <Toaster 
+        position="bottom-right" 
+        richColors 
+        closeButton
+        toastOptions={{
+          className: 'font-sans',
+        }}
+      />
     </div>
   );
 }

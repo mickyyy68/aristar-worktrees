@@ -10,6 +10,22 @@ interface TaskListSidebarProps {
   activeTaskId: string | null;
   onSelectTask: (taskId: string) => void;
   onCreateTask: () => void;
+  isLoading?: boolean;
+}
+
+// Skeleton loader for task items
+function TaskSkeleton() {
+  return (
+    <div className="mb-1 w-full rounded-lg p-3">
+      <div className="flex items-start gap-2">
+        <div className="h-2 w-2 rounded-full bg-muted animate-pulse" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="h-4 w-3/4 rounded bg-muted animate-pulse" />
+          <div className="h-3 w-1/2 rounded bg-muted animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function formatTimestamp(timestamp: number): string {
@@ -32,6 +48,7 @@ export function TaskListSidebar({
   activeTaskId,
   onSelectTask,
   onCreateTask,
+  isLoading = false,
 }: TaskListSidebarProps) {
   // Sort tasks by updatedAt descending (most recent first)
   const sortedTasks = [...tasks].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -46,7 +63,14 @@ export function TaskListSidebar({
       </div>
 
       <ScrollArea className="flex-1">
-        {sortedTasks.length === 0 ? (
+        {isLoading ? (
+          // Skeleton loading state
+          <div className="p-2">
+            <TaskSkeleton />
+            <TaskSkeleton />
+            <TaskSkeleton />
+          </div>
+        ) : sortedTasks.length === 0 ? (
           <div className="p-4 text-center text-sm text-muted-foreground">
             No tasks yet. Create your first task to get started.
           </div>

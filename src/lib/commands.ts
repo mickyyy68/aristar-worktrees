@@ -217,3 +217,19 @@ export async function getAgentOpencodePort(
 export async function stopTaskAllOpencode(taskId: string): Promise<void> {
   return await invoke('stop_task_all_opencode', { taskId });
 }
+
+// ============ Worktree Validation Commands ============
+
+/**
+ * Validate worktrees for a task - returns list of agent IDs with missing worktrees
+ */
+export async function validateTaskWorktrees(taskId: string): Promise<string[]> {
+  return await invoke('validate_task_worktrees', { taskId });
+}
+
+/**
+ * Recreate a worktree for an orphaned agent
+ */
+export async function recreateAgentWorktree(taskId: string, agentId: string): Promise<string> {
+  return await invoke('recreate_agent_worktree', { taskId, agentId });
+}

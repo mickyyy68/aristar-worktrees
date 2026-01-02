@@ -58,6 +58,9 @@ fn main() {
             commands::stop_agent_opencode,
             commands::get_agent_opencode_port,
             commands::stop_task_all_opencode,
+            // Worktree validation commands
+            commands::validate_task_worktrees,
+            commands::recreate_agent_worktree,
         ])
         .setup(|_app| {
             println!("[main] App setup completed");

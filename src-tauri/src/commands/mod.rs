@@ -579,3 +579,24 @@ pub fn stop_task_all_opencode(
 
     Ok(())
 }
+
+// ============ Worktree Validation Commands ============
+
+/// Validate worktrees for a task - returns list of agent IDs with missing worktrees
+#[tauri::command]
+pub fn validate_task_worktrees(
+    state: State<TaskManagerState>,
+    task_id: String,
+) -> Result<Vec<String>, String> {
+    task_manager::validate_task_worktrees_impl(&state, task_id)
+}
+
+/// Recreate a worktree for an orphaned agent
+#[tauri::command]
+pub fn recreate_agent_worktree(
+    state: State<TaskManagerState>,
+    task_id: String,
+    agent_id: String,
+) -> Result<String, String> {
+    task_manager::recreate_agent_worktree_impl(&state, task_id, agent_id)
+}

@@ -145,3 +145,74 @@ export interface ToolResultPart {
 export type MessagePart = TextPart | ToolInvocationPart | ToolResultPart | { type: string; [key: string]: unknown };
 
 export type MessageStatus = 'pending' | 'streaming' | 'complete' | 'error';
+
+// ============ SSE Event Types ============
+
+/**
+ * SSE event from OpenCode /event endpoint
+ */
+export interface OpenCodeSSEEvent {
+  type: string;
+  properties?: Record<string, unknown>;
+}
+
+/**
+ * Message part delta event
+ */
+export interface MessagePartDeltaEvent extends OpenCodeSSEEvent {
+  type: 'message.part.delta';
+  properties: {
+    sessionID: string;
+    messageID: string;
+    part: MessagePart;
+  };
+}
+
+/**
+ * Message created event
+ */
+export interface MessageCreatedEvent extends OpenCodeSSEEvent {
+  type: 'message.created';
+  properties: {
+    sessionID: string;
+    info: {
+      id: string;
+      role: 'user' | 'assistant' | 'system';
+      created: string;
+    };
+  };
+}
+
+/**
+ * Message completed event
+ */
+export interface MessageCompletedEvent extends OpenCodeSSEEvent {
+  type: 'message.completed';
+  properties: {
+    sessionID: string;
+    messageID: string;
+  };
+}
+
+/**
+ * Session updated event (includes status changes)
+ */
+export interface SessionUpdatedEvent extends OpenCodeSSEEvent {
+  type: 'session.updated';
+  properties: {
+    id: string;
+    status?: 'idle' | 'running' | 'pending';
+  };
+}
+
+/**
+ * Extended message with streaming support
+ */
+export interface StreamingMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: Date;
+  parts: MessagePart[];
+  isStreaming: boolean;
+}

@@ -502,8 +502,8 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
 ## Phase 9: Integration & Wiring
 
 ### 9.1 Wire Up Task Creation Flow
-- [ ] Connect create-task-dialog to store
-- [ ] On submit:
+- [x] Connect create-task-dialog to store
+- [x] On submit:
   1. Call `createTask` command
   2. Start OpenCode server for task
   3. Create sessions for each agent
@@ -511,70 +511,69 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
   5. Navigate to task detail view
 
 ### 9.2 Wire Up Chat Flow
-- [ ] Connect chat-input to store
-- [ ] On send:
+- [x] Connect chat-input to store
+- [x] On send:
   1. Add user message to UI immediately
   2. Send prompt to selected agent(s)
   3. Update messages as responses stream in
   4. Update agent status
 
 ### 9.3 Wire Up Agent Actions
-- [ ] Connect pause/resume/stop buttons to store
-- [ ] Connect accept button to store
-- [ ] Connect cleanup action to store
+- [x] Connect pause/resume/stop buttons to store
+- [x] Connect accept button to store
+- [x] Connect cleanup action to store
 
 ### 9.4 Real-time Updates
-- [ ] Subscribe to OpenCode events on task activation
-- [ ] Update message list as events arrive
-- [ ] Update agent status based on events
+- [x] Subscribe to OpenCode events on task activation (useAgentSSE hook)
+- [x] Update message list as events arrive (SSE streaming)
+- [x] Update agent status based on events
 
 ---
 
 ## Phase 10: Task Persistence & Recovery
 
 ### 10.1 Persistence
-- [ ] Save tasks to `tasks.json` on every change
-- [ ] Load tasks on app startup
-- [ ] Validate task data (check if worktrees still exist)
+- [x] Save tasks to `tasks.json` on every change
+- [x] Load tasks on app startup
+- [x] Validate task data (check if worktrees still exist)
 
 ### 10.2 Recovery
-- [ ] Handle case where worktrees were manually deleted
-- [ ] Mark agents as "orphaned" if worktree missing
-- [ ] Provide option to recreate or remove orphaned agents
+- [x] Handle case where worktrees were manually deleted
+- [x] Mark agents as "orphaned" if worktree missing
+- [x] Provide option to recreate or remove orphaned agents
 
 ### 10.3 OpenCode Server Recovery
-- [ ] On task activation, check if OpenCode server is running
-- [ ] If not, start it automatically
-- [ ] Restore sessions from OpenCode's own persistence
+- [x] On task activation, check if OpenCode server is running
+- [x] If not, start it automatically
+- [x] Restore sessions from OpenCode's own persistence
 
 ---
 
 ## Phase 11: Polish & UX
 
 ### 11.1 Loading States
-- [ ] Add skeleton loaders for task list
-- [ ] Add skeleton loaders for chat messages
-- [ ] Add loading spinner for task creation
+- [x] Add skeleton loaders for task list
+- [x] Add skeleton loaders for chat messages (uses existing ChatMessageLoading)
+- [x] Add loading spinner for task creation (already implemented)
 
 ### 11.2 Error Handling
-- [ ] Display errors in toast notifications
-- [ ] Handle OpenCode connection failures gracefully
-- [ ] Retry logic for transient failures
+- [x] Display errors in toast notifications (sonner)
+- [x] Handle OpenCode connection failures gracefully
+- [x] Retry logic for transient failures (via server recovery)
 
 ### 11.3 Confirmations
-- [ ] Confirm before deleting task
-- [ ] Confirm before cleaning up unaccepted agents
-- [ ] Confirm before stopping running agent
+- [x] Confirm before deleting task
+- [x] Confirm before cleaning up unaccepted agents
+- [x] Confirm before stopping running agent
 
 ### 11.4 Keyboard Shortcuts
-- [ ] Tab to switch between agents
-- [ ] Cmd+Enter to send message
-- [ ] Cmd+N for new task
-- [ ] Escape to close dialogs
+- [x] Tab/Shift+Tab to switch between agents
+- [x] Cmd+Enter to send message (already in chat-input)
+- [x] Cmd+N for new task
+- [x] Escape to close dialogs (built into shadcn Dialog)
 
 ### 11.5 Responsive Design
-- [ ] Ensure Agent Manager works on smaller screens
-- [ ] Collapsible sidebar on narrow viewports
+- [x] N/A - Desktop only app (per user request)
 
 ---
 

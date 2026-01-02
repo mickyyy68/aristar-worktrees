@@ -517,6 +517,88 @@ pub fn accept_agent_impl(
     Ok(())
 }
 
+/// Validate worktrees for a task - returns list of agent IDs with missing worktrees
+pub fn validate_task_worktrees_impl(
+    state: &TaskManagerState,
+    task_id: String,
+) -> Result<Vec<String>, String> {
+    let store = state.store.lock().map_err(|e| e.to_string())?;
+    let task = store
+        .tasks
+        .iter()
+        .find(|t| t.id == task_id)
+        .ok_or_else(|| format!("Task not found: {}", task_id))?;
+
+    let orphaned_agents: Vec<String> = task
+        .agents
+        .iter()
+        .filter(|a| !std::path::Path::new(&a.worktree_path).exists())
+        .map(|a| a.id.clone())
+        .collect();
+
+    if !orphaned_agents.is_empty() {
+        println!(
+            "[task_manager] Found {} orphaned agents in task {}",
+            orphaned_agents.len(),
+            task_id
+        );
+    }
+
+    Ok(orphaned_agents)
+}
+
+/// Recreate a worktree for an orphaned agent
+pub fn recreate_agent_worktree_impl(
+    state: &TaskManagerState,
+    task_id: String,
+    agent_id: String,
+) -> Result<String, String> {
+    let (source_repo_path, source_ref, worktree_path) = {
+        let store = state.store.lock().map_err(|e| e.to_string())?;
+        let task = store
+            .tasks
+            .iter()
+            .find(|t| t.id == task_id)
+            .ok_or_else(|| format!("Task not found: {}", task_id))?;
+
+        let agent = task
+            .agents
+            .iter()
+            .find(|a| a.id == agent_id)
+            .ok_or_else(|| format!("Agent not found: {}", agent_id))?;
+
+        // Check if worktree already exists
+        if std::path::Path::new(&agent.worktree_path).exists() {
+            return Err("Worktree already exists".to_string());
+        }
+
+        let source_ref = match task.source_type.as_str() {
+            "commit" => task.source_commit.clone(),
+            _ => task.source_branch.clone(),
+        };
+
+        (
+            task.source_repo_path.clone(),
+            source_ref,
+            agent.worktree_path.clone(),
+        )
+    };
+
+    // Create the worktree
+    let created_path = worktree::create_worktree_at_path(
+        &source_repo_path,
+        &worktree_path,
+        source_ref.as_deref(),
+    )?;
+
+    println!(
+        "[task_manager] Recreated worktree for agent {} in task {}",
+        agent_id, task_id
+    );
+
+    Ok(created_path)
+}
+
 /// Cleanup (delete) all unaccepted agents' worktrees
 pub fn cleanup_unaccepted_agents_impl(
     state: &TaskManagerState,
