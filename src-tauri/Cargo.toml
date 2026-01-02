@@ -1,6 +1,6 @@
 [package]
 name = "aristar-worktrees"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Tauri application for managing git worktrees"
 authors = ["you"]
 edition = "2021"
