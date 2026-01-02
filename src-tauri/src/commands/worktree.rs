@@ -42,6 +42,7 @@ pub struct BranchInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommitInfo {
     pub hash: String,
     pub short_hash: String,

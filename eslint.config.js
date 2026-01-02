@@ -4,6 +4,9 @@ import tseslint from 'typescript-eslint'
 
 export default [
   {
+    ignores: ['**/target/**', '**/src-tauri/target/**'],
+  },
+  {
     files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
     languageOptions: {
       ecmaVersion: 2020,

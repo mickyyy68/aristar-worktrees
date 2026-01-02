@@ -155,7 +155,7 @@ export function CreateWorktreeDialog({ open, onOpenChange }: CreateWorktreeDialo
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-hidden">
           <div className="space-y-2">
             <Label htmlFor="name">Worktree Name</Label>
             <Input
@@ -227,23 +227,35 @@ export function CreateWorktreeDialog({ open, onOpenChange }: CreateWorktreeDialo
                         type="button"
                         onClick={() => setSelectedCommit(commit)}
                         className={`
-                          flex w-full items-start gap-3 rounded-md px-3 py-2 text-left transition-colors
+                          flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors
                           ${selectedCommit?.hash === commit.hash 
-                            ? 'bg-primary/10 text-primary' 
+                            ? 'bg-primary/15' 
                             : 'hover:bg-muted/50'
                           }
                         `}
                       >
-                        <GitCommit className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                        <GitCommit className={`mt-0.5 h-4 w-4 shrink-0 ${selectedCommit?.hash === commit.hash ? 'text-primary' : 'text-muted-foreground'}`} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <code className="text-xs font-medium">{commit.shortHash}</code>
+                            <code 
+                              className={`
+                                shrink-0 rounded px-1.5 py-0.5 font-mono text-xs font-semibold
+                                ${selectedCommit?.hash === commit.hash 
+                                  ? 'bg-primary/10 text-primary' 
+                                  : 'bg-muted/50 text-foreground'
+                                }
+                              `}
+                            >
+                              {commit.shortHash || commit.hash?.slice(0, 7) || '???????'}
+                            </code>
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                              {commit.message}
+                            </span>
                             {selectedCommit?.hash === commit.hash && (
-                              <Check className="h-3.5 w-3.5 text-primary" />
+                              <Check className="h-4 w-4 shrink-0 text-primary" />
                             )}
                           </div>
-                          <p className="truncate text-sm">{commit.message}</p>
-                          <p className="text-xs text-muted-foreground">{commit.author}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{commit.author}</p>
                         </div>
                       </button>
                     ))}
