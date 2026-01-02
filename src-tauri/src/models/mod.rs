@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+pub mod task;
+
+pub use task::*;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppSettings {
     pub theme: String,

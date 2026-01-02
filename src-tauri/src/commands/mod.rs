@@ -6,13 +6,17 @@ use std::sync::Mutex;
 use tauri::State;
 
 pub mod opencode_manager;
+pub mod task_manager;
 pub mod worktree;
 
 #[cfg(test)]
 mod tests;
 
 pub use opencode_manager::OpenCodeManager;
+pub use task_manager::TaskManagerState;
 use worktree::{CommitInfo, Repository, StoreData, WorktreeInfo};
+
+use crate::models::task::{AgentStatus, ModelSelection, Task, TaskStatus};
 
 fn get_store_path() -> PathBuf {
     dirs::home_dir()
@@ -343,4 +347,235 @@ pub fn init_store() -> AppState {
     AppState {
         store: Mutex::new(data),
     }
+}
+
+// ============ Task Manager Commands ============
+
+#[tauri::command]
+pub fn create_task(
+    state: State<TaskManagerState>,
+    name: String,
+    source_type: String,
+    source_branch: Option<String>,
+    source_commit: Option<String>,
+    source_repo_path: String,
+    agent_type: String,
+    models: Vec<ModelSelection>,
+) -> Result<Task, String> {
+    task_manager::create_task_impl(
+        &state,
+        name,
+        source_type,
+        source_branch,
+        source_commit,
+        source_repo_path,
+        agent_type,
+        models,
+    )
+}
+
+#[tauri::command]
+pub fn get_tasks(state: State<TaskManagerState>) -> Result<Vec<Task>, String> {
+    task_manager::get_tasks_impl(&state)
+}
+
+#[tauri::command]
+pub fn get_task(state: State<TaskManagerState>, task_id: String) -> Result<Task, String> {
+    task_manager::get_task_impl(&state, &task_id)
+}
+
+#[tauri::command]
+pub fn update_task(
+    state: State<TaskManagerState>,
+    task_id: String,
+    name: Option<String>,
+    status: Option<TaskStatus>,
+) -> Result<Task, String> {
+    task_manager::update_task_impl(&state, task_id, name, status)
+}
+
+#[tauri::command]
+pub fn delete_task(
+    state: State<TaskManagerState>,
+    task_id: String,
+    delete_worktrees: bool,
+) -> Result<(), String> {
+    task_manager::delete_task_impl(&state, task_id, delete_worktrees)
+}
+
+#[tauri::command]
+pub fn add_agent_to_task(
+    state: State<TaskManagerState>,
+    task_id: String,
+    model_id: String,
+    provider_id: String,
+    agent_type: Option<String>,
+) -> Result<Task, String> {
+    task_manager::add_agent_to_task_impl(&state, task_id, model_id, provider_id, agent_type)
+}
+
+#[tauri::command]
+pub fn remove_agent_from_task(
+    state: State<TaskManagerState>,
+    task_id: String,
+    agent_id: String,
+    delete_worktree: bool,
+) -> Result<(), String> {
+    task_manager::remove_agent_from_task_impl(&state, task_id, agent_id, delete_worktree)
+}
+
+#[tauri::command]
+pub fn update_agent_session(
+    state: State<TaskManagerState>,
+    task_id: String,
+    agent_id: String,
+    session_id: Option<String>,
+) -> Result<(), String> {
+    task_manager::update_agent_session_impl(&state, task_id, agent_id, session_id)
+}
+
+#[tauri::command]
+pub fn update_agent_status(
+    state: State<TaskManagerState>,
+    task_id: String,
+    agent_id: String,
+    status: AgentStatus,
+) -> Result<(), String> {
+    task_manager::update_agent_status_impl(&state, task_id, agent_id, status)
+}
+
+#[tauri::command]
+pub fn accept_agent(
+    state: State<TaskManagerState>,
+    task_id: String,
+    agent_id: String,
+) -> Result<(), String> {
+    task_manager::accept_agent_impl(&state, task_id, agent_id)
+}
+
+#[tauri::command]
+pub fn cleanup_unaccepted_agents(
+    state: State<TaskManagerState>,
+    task_id: String,
+) -> Result<(), String> {
+    task_manager::cleanup_unaccepted_agents_impl(&state, task_id)
+}
+
+// ============ Agent OpenCode Commands ============
+
+/// Start OpenCode server for a specific agent (uses agent's worktree as working directory)
+#[tauri::command]
+pub fn start_agent_opencode(
+    task_state: State<TaskManagerState>,
+    opencode_state: State<OpenCodeManager>,
+    task_id: String,
+    agent_id: String,
+) -> Result<u16, String> {
+    // Get the agent's worktree path from the task
+    let worktree_path = {
+        let store = task_state.store.lock().map_err(|e| e.to_string())?;
+        let task = store
+            .tasks
+            .iter()
+            .find(|t| t.id == task_id)
+            .ok_or_else(|| format!("Task not found: {}", task_id))?;
+
+        let agent = task
+            .agents
+            .iter()
+            .find(|a| a.id == agent_id)
+            .ok_or_else(|| format!("Agent not found: {}", agent_id))?;
+
+        agent.worktree_path.clone()
+    };
+
+    let path = PathBuf::from(worktree_path);
+    opencode_state.start(path)
+}
+
+/// Stop OpenCode server for a specific agent
+#[tauri::command]
+pub fn stop_agent_opencode(
+    task_state: State<TaskManagerState>,
+    opencode_state: State<OpenCodeManager>,
+    task_id: String,
+    agent_id: String,
+) -> Result<(), String> {
+    let worktree_path = {
+        let store = task_state.store.lock().map_err(|e| e.to_string())?;
+        let task = store
+            .tasks
+            .iter()
+            .find(|t| t.id == task_id)
+            .ok_or_else(|| format!("Task not found: {}", task_id))?;
+
+        let agent = task
+            .agents
+            .iter()
+            .find(|a| a.id == agent_id)
+            .ok_or_else(|| format!("Agent not found: {}", agent_id))?;
+
+        agent.worktree_path.clone()
+    };
+
+    let path = PathBuf::from(worktree_path);
+    opencode_state.stop(&path)
+}
+
+/// Get OpenCode port for a specific agent
+#[tauri::command]
+pub fn get_agent_opencode_port(
+    task_state: State<TaskManagerState>,
+    opencode_state: State<OpenCodeManager>,
+    task_id: String,
+    agent_id: String,
+) -> Result<Option<u16>, String> {
+    let worktree_path = {
+        let store = task_state.store.lock().map_err(|e| e.to_string())?;
+        let task = store
+            .tasks
+            .iter()
+            .find(|t| t.id == task_id)
+            .ok_or_else(|| format!("Task not found: {}", task_id))?;
+
+        let agent = task
+            .agents
+            .iter()
+            .find(|a| a.id == agent_id)
+            .ok_or_else(|| format!("Agent not found: {}", agent_id))?;
+
+        agent.worktree_path.clone()
+    };
+
+    let path = PathBuf::from(worktree_path);
+    opencode_state.get_port(&path)
+}
+
+/// Stop all OpenCode servers for all agents in a task
+#[tauri::command]
+pub fn stop_task_all_opencode(
+    task_state: State<TaskManagerState>,
+    opencode_state: State<OpenCodeManager>,
+    task_id: String,
+) -> Result<(), String> {
+    let worktree_paths: Vec<String> = {
+        let store = task_state.store.lock().map_err(|e| e.to_string())?;
+        let task = store
+            .tasks
+            .iter()
+            .find(|t| t.id == task_id)
+            .ok_or_else(|| format!("Task not found: {}", task_id))?;
+
+        task.agents
+            .iter()
+            .map(|a| a.worktree_path.clone())
+            .collect()
+    };
+
+    for worktree_path in worktree_paths {
+        let path = PathBuf::from(worktree_path);
+        let _ = opencode_state.stop(&path);
+    }
+
+    Ok(())
 }

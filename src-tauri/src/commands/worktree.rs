@@ -740,3 +740,65 @@ pub fn copy_to_clipboard(text: &str) -> Result<(), String> {
 
     Ok(())
 }
+
+/// Create a worktree at a specific custom path.
+/// This is used by the Agent Manager to create worktrees inside task folders.
+///
+/// Unlike `create_worktree`, this function allows specifying the exact destination path
+/// instead of using the default ~/.aristar-worktrees/{hash}/{name} location.
+///
+/// # Arguments
+/// * `repo_path` - Path to the source git repository
+/// * `destination_path` - Full path where the worktree should be created
+/// * `branch_or_commit` - Optional branch name or commit hash to checkout
+///
+/// # Returns
+/// The full path to the created worktree
+pub fn create_worktree_at_path(
+    repo_path: &str,
+    destination_path: &str,
+    branch_or_commit: Option<&str>,
+) -> Result<String, String> {
+    let repo_path_canonical = Path::new(repo_path)
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve repo path: {}", e))?;
+    let repo_path_str = repo_path_canonical.to_string_lossy().to_string();
+
+    // Ensure the parent directory exists
+    let dest_path = Path::new(destination_path);
+    if let Some(parent) = dest_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+    }
+
+    // Build the git worktree add command
+    let mut args = vec!["worktree", "add", destination_path];
+
+    // Add branch or commit if specified
+    if let Some(ref_name) = branch_or_commit {
+        // Check if it's a commit hash (40 chars hex) or short hash
+        let is_commit = ref_name.len() >= 7
+            && ref_name.len() <= 40
+            && ref_name.chars().all(|c| c.is_ascii_hexdigit());
+
+        if is_commit {
+            // For commits, use --detach to create a detached HEAD worktree
+            args.push("--detach");
+            args.push(ref_name);
+        } else {
+            // For branches, just add the branch name
+            args.push(ref_name);
+        }
+    }
+
+    run_git_command(&args, &repo_path_str)?;
+
+    // Canonicalize the destination path after creation
+    let created_path = Path::new(destination_path)
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve created worktree path: {}", e))?
+        .to_string_lossy()
+        .to_string();
+
+    Ok(created_path)
+}

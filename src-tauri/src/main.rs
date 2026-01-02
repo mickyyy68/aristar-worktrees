@@ -4,6 +4,7 @@
 )]
 
 mod commands;
+mod models;
 
 use tauri::Manager;
 
@@ -14,11 +15,14 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(commands::init_store())
         .manage(commands::OpenCodeManager::new())
+        .manage(commands::TaskManagerState::new())
         .invoke_handler(tauri::generate_handler![
+            // Repository commands
             commands::get_repositories,
             commands::add_repository,
             commands::remove_repository,
             commands::refresh_repository,
+            // Worktree commands
             commands::list_worktrees,
             commands::create_worktree,
             commands::remove_worktree,
@@ -27,14 +31,33 @@ fn main() {
             commands::unlock_worktree,
             commands::get_branches,
             commands::get_commits,
+            // System commands
             commands::open_in_terminal,
             commands::open_in_editor,
             commands::reveal_in_finder,
             commands::copy_to_clipboard,
+            // OpenCode commands (for worktrees)
             commands::start_opencode,
             commands::stop_opencode,
             commands::get_opencode_status,
             commands::is_opencode_running,
+            // Task Manager commands
+            commands::create_task,
+            commands::get_tasks,
+            commands::get_task,
+            commands::update_task,
+            commands::delete_task,
+            commands::add_agent_to_task,
+            commands::remove_agent_from_task,
+            commands::update_agent_session,
+            commands::update_agent_status,
+            commands::accept_agent,
+            commands::cleanup_unaccepted_agents,
+            // Agent OpenCode commands
+            commands::start_agent_opencode,
+            commands::stop_agent_opencode,
+            commands::get_agent_opencode_port,
+            commands::stop_task_all_opencode,
         ])
         .setup(|_app| {
             println!("[main] App setup completed");

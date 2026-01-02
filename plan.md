@@ -75,7 +75,7 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
 ## Phase 1: Data Models & Types
 
 ### 1.1 TypeScript Types
-- [ ] Create `src/store/types/agent-manager.ts` with core types:
+- [x] Create `src/store/types/agent-manager.ts` with core types:
   ```typescript
   interface Task {
     id: string;                    // Unique hash
@@ -125,10 +125,10 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
   }
   ```
 
-- [ ] Export types from `src/store/types.ts`
+- [x] Export types from `src/store/types.ts`
 
 ### 1.2 Rust Types
-- [ ] Create `src-tauri/src/models/task.rs` with Rust structs:
+- [x] Create `src-tauri/src/models/task.rs` with Rust structs:
   ```rust
   #[derive(Serialize, Deserialize, Clone)]
   pub struct Task { ... }
@@ -137,89 +137,89 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
   pub struct TaskAgent { ... }
   ```
 
-- [ ] Update `src-tauri/src/models/mod.rs` to export task types
+- [x] Update `src-tauri/src/models/mod.rs` to export task types
 
 ---
 
 ## Phase 2: Rust Backend Commands
 
 ### 2.1 Task Storage Functions
-- [ ] Create `src-tauri/src/commands/task_manager.rs`
-- [ ] Implement `get_tasks_base_path()` -> `~/.aristar-worktrees/tasks/`
-- [ ] Implement `get_tasks_store_path()` -> `~/.aristar-worktrees/tasks.json`
-- [ ] Implement `generate_task_id(name: &str)` -> 8-char hash
-- [ ] Implement `load_tasks()` -> `Vec<Task>`
-- [ ] Implement `save_tasks(tasks: &Vec<Task>)`
-- [ ] Implement `get_task_folder_path(task_id: &str)` -> PathBuf
+- [x] Create `src-tauri/src/commands/task_manager.rs`
+- [x] Implement `get_tasks_base_path()` -> `~/.aristar-worktrees/tasks/`
+- [x] Implement `get_tasks_store_path()` -> `~/.aristar-worktrees/tasks.json`
+- [x] Implement `generate_task_id(name: &str)` -> 8-char hash
+- [x] Implement `load_tasks()` -> `Vec<Task>`
+- [x] Implement `save_tasks(tasks: &Vec<Task>)`
+- [x] Implement `get_task_folder_path(task_id: &str)` -> PathBuf
 
 ### 2.2 Task CRUD Commands
-- [ ] Implement `create_task` command:
+- [x] Implement `create_task` command:
   - Parameters: `name`, `source_type`, `source_branch`, `source_commit`, `source_repo_path`, `agent_type`, `models: Vec<ModelSelection>`
   - Creates task folder: `~/.aristar-worktrees/tasks/{task-id}/`
   - Creates worktree for each model: `~/.aristar-worktrees/tasks/{task-id}/{task-name}-{model-slug}/`
   - Returns created `Task`
 
-- [ ] Implement `get_tasks` command:
+- [x] Implement `get_tasks` command:
   - Returns all tasks from `tasks.json`
 
-- [ ] Implement `get_task` command:
+- [x] Implement `get_task` command:
   - Parameters: `task_id`
   - Returns single `Task`
 
-- [ ] Implement `update_task` command:
+- [x] Implement `update_task` command:
   - Parameters: `task_id`, optional fields to update
   - Updates task metadata
 
-- [ ] Implement `delete_task` command:
+- [x] Implement `delete_task` command:
   - Parameters: `task_id`, `delete_worktrees: bool`
   - Removes task and optionally all worktrees
 
 ### 2.3 Agent Management Commands
-- [ ] Implement `add_agent_to_task` command:
+- [x] Implement `add_agent_to_task` command:
   - Parameters: `task_id`, `model_id`, `provider_id`, `agent_type`
   - Creates new worktree for the agent
   - Returns updated `Task`
 
-- [ ] Implement `remove_agent_from_task` command:
+- [x] Implement `remove_agent_from_task` command:
   - Parameters: `task_id`, `agent_id`, `delete_worktree: bool`
   - Removes agent and optionally its worktree
 
-- [ ] Implement `accept_agent` command:
+- [x] Implement `accept_agent` command:
   - Parameters: `task_id`, `agent_id`
   - Marks agent as accepted
 
-- [ ] Implement `cleanup_unaccepted_agents` command:
+- [x] Implement `cleanup_unaccepted_agents` command:
   - Parameters: `task_id`
   - Deletes worktrees for non-accepted agents
 
 ### 2.4 Agent OpenCode Integration
-- [ ] Implement `start_agent_opencode` command:
+- [x] Implement `start_agent_opencode` command:
   - Parameters: `task_id`, `agent_id`
   - Starts OpenCode server for the agent (uses agent's worktree as working dir)
   - Returns port number
 
-- [ ] Implement `stop_agent_opencode` command:
+- [x] Implement `stop_agent_opencode` command:
   - Parameters: `task_id`, `agent_id`
   - Stops OpenCode server for the agent
 
-- [ ] Implement `get_agent_opencode_port` command:
+- [x] Implement `get_agent_opencode_port` command:
   - Parameters: `task_id`, `agent_id`
   - Returns port if running, null otherwise
 
-- [ ] Implement `stop_task_all_opencode` command:
+- [x] Implement `stop_task_all_opencode` command:
   - Parameters: `task_id`
   - Stops all OpenCode servers for all agents in the task
 
 ### 2.5 Register Commands
-- [ ] Add all new commands to `src-tauri/src/main.rs` invoke_handler
-- [ ] Add `TaskManager` state to Tauri app
+- [x] Add all new commands to `src-tauri/src/main.rs` invoke_handler
+- [x] Add `TaskManager` state to Tauri app
 
 ---
 
 ## Phase 3: OpenCode Client Extensions
 
 ### 3.1 Extend OpenCode Client
-- [ ] Add to `src/lib/opencode.ts`:
+- [x] Add to `src/lib/opencode.ts`:
   ```typescript
   // Provider & Model fetching (GET /config/providers, GET /agent)
   async getProviders(): Promise<{ providers: OpenCodeProvider[]; default: Record<string, string> }>
@@ -246,11 +246,11 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
   ```
 
 ### 3.2 Add Message Types
-- [ ] Extend `OpenCodeMessage` interface to include:
+- [x] Extend `OpenCodeMessage` interface to include:
   - `parts: MessagePart[]` (for tool calls, code blocks, etc.)
   - `status?: 'pending' | 'streaming' | 'complete' | 'error'`
 
-- [ ] Add `MessagePart` type:
+- [x] Add `MessagePart` type:
   ```typescript
   type MessagePart = 
     | { type: 'text'; text: string }
@@ -263,7 +263,7 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
 ## Phase 4: Zustand Store - Agent Manager
 
 ### 4.1 Create Agent Manager Store Slice
-- [ ] Create `src/store/agent-manager-store.ts` with:
+- [x] Create `src/store/agent-manager-store.ts` with:
   ```typescript
   interface AgentManagerState {
     // Data
@@ -319,15 +319,15 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
   ```
 
 ### 4.2 Integrate with App Store
-- [ ] Add `agentManager` slice to main `useAppStore`
-- [ ] Or create separate `useAgentManagerStore` (preferred for separation)
+- [x] Add `agentManager` slice to main `useAppStore`
+- [x] Or create separate `useAgentManagerStore` (preferred for separation)
 
 ---
 
 ## Phase 5: Frontend Commands Bridge
 
 ### 5.1 Add Commands to `src/lib/commands.ts`
-- [ ] Add task commands:
+- [x] Add task commands:
   ```typescript
   export async function createTask(...): Promise<Task>
   export async function getTasks(): Promise<Task[]>
@@ -336,7 +336,7 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
   export async function deleteTask(taskId: string, deleteWorktrees: boolean): Promise<void>
   ```
 
-- [ ] Add agent commands:
+- [x] Add agent commands:
   ```typescript
   export async function addAgentToTask(...): Promise<Task>
   export async function removeAgentFromTask(...): Promise<void>
@@ -344,7 +344,7 @@ Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
   export async function cleanupUnacceptedAgents(...): Promise<void>
   ```
 
-- [ ] Add agent OpenCode commands:
+- [x] Add agent OpenCode commands:
   ```typescript
   export async function startAgentOpencode(taskId: string, agentId: string): Promise<number>
   export async function stopAgentOpencode(taskId: string, agentId: string): Promise<void>

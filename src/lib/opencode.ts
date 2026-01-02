@@ -12,6 +12,65 @@ export interface OpenCodeSession {
   updated: Date;
 }
 
+// ============ Extended Types for Agent Manager ============
+
+/**
+ * Model information from OpenCode
+ */
+export interface OpenCodeModel {
+  id: string;
+  name: string;
+  limit?: {
+    context?: number;
+    output?: number;
+  };
+}
+
+/**
+ * Provider information from OpenCode
+ */
+export interface OpenCodeProvider {
+  id: string;
+  name: string;
+  models: OpenCodeModel[];
+}
+
+/**
+ * Agent configuration from OpenCode
+ */
+export interface OpenCodeAgentInfo {
+  id: string;
+  name: string;
+  description: string;
+  mode: 'primary' | 'subagent' | 'all';
+}
+
+/**
+ * Message part types for extended message parsing
+ */
+export interface TextPart {
+  type: 'text';
+  text: string;
+}
+
+export interface ToolInvocationPart {
+  type: 'tool-invocation';
+  toolInvocationId: string;
+  toolName: string;
+  state: 'pending' | 'result' | 'error';
+  args?: unknown;
+  result?: unknown;
+}
+
+export type MessagePart = TextPart | ToolInvocationPart | { type: string; [key: string]: unknown };
+
+/**
+ * Extended message with full parts information
+ */
+export interface OpenCodeMessageExtended extends OpenCodeMessage {
+  parts: MessagePart[];
+}
+
 class OpenCodeClient {
   private baseUrl: string | null = null;
   private currentSessionId: string | null = null;
@@ -226,6 +285,246 @@ class OpenCodeClient {
     }
 
     return await response.json();
+  }
+
+  // ============ Extended Methods for Agent Manager ============
+
+  /**
+   * Get available providers and their models
+   * Endpoint: GET /config/providers
+   */
+  async getProviders(): Promise<{ providers: OpenCodeProvider[]; default: Record<string, string> }> {
+    const url = `${this.getBaseUrl()}/config/providers`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to get providers: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // Transform the API response to our format
+    const providers: OpenCodeProvider[] = (data.providers || []).map((p: any) => ({
+      id: p.id,
+      name: p.name || p.id,
+      models: (p.models || []).map((m: any) => ({
+        id: m.id,
+        name: m.name || m.id,
+        limit: m.limit,
+      })),
+    }));
+
+    return {
+      providers,
+      default: data.default || {},
+    };
+  }
+
+  /**
+   * Get all provider info including connected status
+   * Endpoint: GET /provider
+   */
+  async getProviderInfo(): Promise<{
+    all: OpenCodeProvider[];
+    default: Record<string, string>;
+    connected: string[];
+  }> {
+    const url = `${this.getBaseUrl()}/provider`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to get provider info: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Get available agents
+   * Endpoint: GET /agent
+   */
+  async getAgents(): Promise<OpenCodeAgentInfo[]> {
+    const url = `${this.getBaseUrl()}/agent`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to get agents: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.map((a: any) => ({
+      id: a.id,
+      name: a.name || a.id,
+      description: a.description || '',
+      mode: a.mode || 'all',
+    }));
+  }
+
+  /**
+   * Send prompt with model and agent options
+   * Endpoint: POST /session/:id/message
+   *
+   * Note: model is a single string "provider/model-id" format
+   */
+  async sendPromptWithOptions(
+    prompt: string,
+    options: {
+      model?: string; // e.g., "anthropic/claude-sonnet-4"
+      agent?: string;
+    }
+  ): Promise<OpenCodeMessage> {
+    if (!this.currentSessionId) {
+      await this.createSession();
+    }
+
+    const url = `${this.getBaseUrl()}/session/${this.currentSessionId}/message`;
+    const body: Record<string, unknown> = {
+      parts: [{ type: 'text', text: prompt }],
+    };
+
+    if (options.model) {
+      body.model = options.model;
+    }
+
+    if (options.agent) {
+      body.agent = options.agent;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to send prompt: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const content = data.parts
+      .filter((p: any) => p.type === 'text')
+      .map((p: any) => p.text)
+      .join('\n');
+
+    return {
+      id: data.info.id,
+      role: data.info.role,
+      content,
+      timestamp: new Date(data.info.created),
+    };
+  }
+
+  /**
+   * Send prompt asynchronously (returns immediately, no wait for response)
+   * Endpoint: POST /session/:id/prompt_async
+   */
+  async sendPromptAsync(
+    prompt: string,
+    options?: {
+      model?: string;
+      agent?: string;
+    }
+  ): Promise<void> {
+    if (!this.currentSessionId) {
+      await this.createSession();
+    }
+
+    const url = `${this.getBaseUrl()}/session/${this.currentSessionId}/prompt_async`;
+    const body: Record<string, unknown> = {
+      parts: [{ type: 'text', text: prompt }],
+    };
+
+    if (options?.model) {
+      body.model = options.model;
+    }
+
+    if (options?.agent) {
+      body.agent = options.agent;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to send async prompt: ${response.statusText}`);
+    }
+    // Returns 204 No Content on success
+  }
+
+  /**
+   * Abort/cancel a running session
+   * Endpoint: POST /session/:id/abort
+   */
+  async abortSession(sessionId: string): Promise<boolean> {
+    const url = `${this.getBaseUrl()}/session/${sessionId}/abort`;
+    const response = await fetch(url, { method: 'POST' });
+
+    if (!response.ok) {
+      throw new Error(`Failed to abort session: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Subscribe to SSE events for real-time updates
+   * Endpoint: GET /event
+   *
+   * First event is 'server.connected', then bus events
+   */
+  subscribeToEvents(onEvent: (event: any) => void): () => void {
+    const url = `${this.getBaseUrl()}/event`;
+    const eventSource = new EventSource(url);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        onEvent(data);
+      } catch (e) {
+        console.error('[OpenCodeClient] Failed to parse event:', e);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('[OpenCodeClient] EventSource error:', error);
+    };
+
+    // Return unsubscribe function
+    return () => {
+      eventSource.close();
+    };
+  }
+
+  /**
+   * Get extended messages with full parts information
+   * Endpoint: GET /session/:id/message
+   */
+  async getSessionMessagesExtended(): Promise<OpenCodeMessageExtended[]> {
+    if (!this.currentSessionId) {
+      return [];
+    }
+
+    const url = `${this.getBaseUrl()}/session/${this.currentSessionId}/message`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to get messages: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.map((m: any) => ({
+      id: m.info.id,
+      role: m.info.role,
+      content: m.parts
+        .filter((p: any) => p.type === 'text')
+        .map((p: any) => p.text)
+        .join('\n'),
+      timestamp: new Date(m.info.created),
+      parts: m.parts,
+    }));
   }
 }
 

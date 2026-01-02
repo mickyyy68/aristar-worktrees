@@ -1,5 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { WorktreeMetadata, Repository, BranchInfo, CommitInfo } from '@/store/types';
+import type {
+  WorktreeMetadata,
+  Repository,
+  BranchInfo,
+  CommitInfo,
+  Task,
+  TaskStatus,
+  AgentStatus,
+  ModelSelection,
+} from '@/store/types';
 
 export async function getRepositories(): Promise<Repository[]> {
   return await invoke('get_repositories');
@@ -101,4 +110,110 @@ export async function getOpencodeStatus(worktreePath: string): Promise<number | 
 
 export async function isOpencodeRunning(worktreePath: string): Promise<boolean> {
   return await invoke('is_opencode_running', { worktreePath });
+}
+
+// ============ Task Manager Commands ============
+
+export async function createTask(
+  name: string,
+  sourceType: string,
+  sourceBranch: string | undefined,
+  sourceCommit: string | undefined,
+  sourceRepoPath: string,
+  agentType: string,
+  models: ModelSelection[]
+): Promise<Task> {
+  return await invoke('create_task', {
+    name,
+    sourceType,
+    sourceBranch,
+    sourceCommit,
+    sourceRepoPath,
+    agentType,
+    models,
+  });
+}
+
+export async function getTasks(): Promise<Task[]> {
+  return await invoke('get_tasks');
+}
+
+export async function getTask(taskId: string): Promise<Task> {
+  return await invoke('get_task', { taskId });
+}
+
+export async function updateTask(
+  taskId: string,
+  name: string | undefined,
+  status: TaskStatus | undefined
+): Promise<Task> {
+  return await invoke('update_task', { taskId, name, status });
+}
+
+export async function deleteTask(taskId: string, deleteWorktrees: boolean): Promise<void> {
+  return await invoke('delete_task', { taskId, deleteWorktrees });
+}
+
+// ============ Agent Management Commands ============
+
+export async function addAgentToTask(
+  taskId: string,
+  modelId: string,
+  providerId: string,
+  agentType: string | undefined
+): Promise<Task> {
+  return await invoke('add_agent_to_task', { taskId, modelId, providerId, agentType });
+}
+
+export async function removeAgentFromTask(
+  taskId: string,
+  agentId: string,
+  deleteWorktree: boolean
+): Promise<void> {
+  return await invoke('remove_agent_from_task', { taskId, agentId, deleteWorktree });
+}
+
+export async function updateAgentSession(
+  taskId: string,
+  agentId: string,
+  sessionId: string | null
+): Promise<void> {
+  return await invoke('update_agent_session', { taskId, agentId, sessionId });
+}
+
+export async function updateAgentStatus(
+  taskId: string,
+  agentId: string,
+  status: AgentStatus
+): Promise<void> {
+  return await invoke('update_agent_status', { taskId, agentId, status });
+}
+
+export async function acceptAgent(taskId: string, agentId: string): Promise<void> {
+  return await invoke('accept_agent', { taskId, agentId });
+}
+
+export async function cleanupUnacceptedAgents(taskId: string): Promise<void> {
+  return await invoke('cleanup_unaccepted_agents', { taskId });
+}
+
+// ============ Agent OpenCode Commands ============
+
+export async function startAgentOpencode(taskId: string, agentId: string): Promise<number> {
+  return await invoke('start_agent_opencode', { taskId, agentId });
+}
+
+export async function stopAgentOpencode(taskId: string, agentId: string): Promise<void> {
+  return await invoke('stop_agent_opencode', { taskId, agentId });
+}
+
+export async function getAgentOpencodePort(
+  taskId: string,
+  agentId: string
+): Promise<number | null> {
+  return await invoke('get_agent_opencode_port', { taskId, agentId });
+}
+
+export async function stopTaskAllOpencode(taskId: string): Promise<void> {
+  return await invoke('stop_task_all_opencode', { taskId });
 }

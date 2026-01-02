@@ -63,3 +63,6 @@ export interface CommitInfo {
   author: string;
   date: number;
 }
+
+// Agent Manager types
+export * from './types/agent-manager';
