@@ -290,6 +290,39 @@ class OpenCodeClient {
   // ============ Extended Methods for Agent Manager ============
 
   /**
+   * Check if the server is healthy/ready
+   * Endpoint: GET /global/health
+   */
+  async healthCheck(): Promise<{ healthy: boolean; version: string }> {
+    const url = `${this.getBaseUrl()}/global/health`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Health check failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Wait for the server to be ready with retries
+   */
+  async waitForReady(maxRetries = 10, delayMs = 300): Promise<boolean> {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        await this.healthCheck();
+        console.log('[OpenCodeClient] Server is ready');
+        return true;
+      } catch {
+        console.log(`[OpenCodeClient] Waiting for server... (${i + 1}/${maxRetries})`);
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+    console.error('[OpenCodeClient] Server did not become ready in time');
+    return false;
+  }
+
+  /**
    * Get available providers and their models
    * Endpoint: GET /config/providers
    */
@@ -302,17 +335,39 @@ class OpenCodeClient {
     }
 
     const data = await response.json();
+    console.log('[OpenCodeClient] getProviders raw response:', JSON.stringify(data, null, 2));
 
     // Transform the API response to our format
-    const providers: OpenCodeProvider[] = (data.providers || []).map((p: any) => ({
-      id: p.id,
-      name: p.name || p.id,
-      models: (p.models || []).map((m: any) => ({
-        id: m.id,
-        name: m.name || m.id,
-        limit: m.limit,
-      })),
-    }));
+    // Handle both array and object formats for models
+    const providers: OpenCodeProvider[] = (data.providers || []).map((p: any) => {
+      // models can be an array or an object (map of model id -> model info)
+      let models: OpenCodeModel[] = [];
+      
+      if (Array.isArray(p.models)) {
+        // Models is already an array
+        models = p.models.map((m: any) => ({
+          id: m.id,
+          name: m.name || m.id,
+          limit: m.limit,
+        }));
+      } else if (p.models && typeof p.models === 'object') {
+        // Models is an object/map - convert to array
+        models = Object.entries(p.models).map(([id, m]: [string, any]) => ({
+          id: m.id || id,
+          name: m.name || m.id || id,
+          limit: m.limit,
+        }));
+      }
+      
+      return {
+        id: p.id,
+        name: p.name || p.id,
+        models,
+      };
+    });
+
+    console.log('[OpenCodeClient] Transformed providers:', providers.length, 'providers');
+    providers.forEach(p => console.log(`  - ${p.name}: ${p.models.length} models`));
 
     return {
       providers,
@@ -352,12 +407,18 @@ class OpenCodeClient {
     }
 
     const data = await response.json();
-    return data.map((a: any) => ({
+    console.log('[OpenCodeClient] getAgents raw response:', JSON.stringify(data, null, 2));
+
+    const agents = data.map((a: any) => ({
       id: a.id,
       name: a.name || a.id,
       description: a.description || '',
       mode: a.mode || 'all',
     }));
+
+    console.log('[OpenCodeClient] Transformed agents:', agents.length, 'agents');
+
+    return agents;
   }
 
   /**

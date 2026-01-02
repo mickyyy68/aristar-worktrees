@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -42,6 +42,8 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     availableAgents,
     loadProviders,
     loadAvailableAgents,
+    refreshOpenCodeData,
+    isLoadingOpenCodeData,
   } = useAgentManagerStore();
 
   const [name, setName] = useState('');
@@ -67,11 +69,11 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
       const port = await commands.startOpencode(selectedRepo.path);
       opencodeClient.connect(port);
       
+      // Load providers and agents - they now return the data directly
       await loadProviders(port);
-      await loadAvailableAgents(port);
+      const agents = await loadAvailableAgents(port);
       
-      // Set default agent type if we have agents
-      const agents = useAgentManagerStore.getState().availableAgents;
+      // Set default agent type using the returned value (fixes race condition)
       if (agents.length > 0 && !agentType) {
         // Find 'coder' or use first available
         const defaultAgent = agents.find(a => a.id === 'coder') || agents[0];
@@ -86,6 +88,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
   }, [selectedRepo, loadProviders, loadAvailableAgents, agentType]);
 
   useEffect(() => {
+    // Only load if dialog is open, we have a repo, and we don't have providers yet
     if (open && selectedRepo && providers.length === 0) {
       loadOpenCodeData();
     }
@@ -243,12 +246,29 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
 
           {/* Model selector */}
           <div className="space-y-2">
-            <Label>Models</Label>
+            <div className="flex items-center justify-between">
+              <Label>Models</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => selectedRepo && refreshOpenCodeData(selectedRepo.path)}
+                disabled={loadingProviders || isLoadingOpenCodeData || !selectedRepo}
+                className="h-7 px-2 text-xs"
+              >
+                {isLoadingOpenCodeData ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1 h-3 w-3" />
+                )}
+                Refresh
+              </Button>
+            </div>
             <ModelSelector
               providers={providers}
               selectedModels={selectedModels}
               onChange={setSelectedModels}
-              isLoading={loadingProviders}
+              isLoading={loadingProviders || isLoadingOpenCodeData}
             />
             <SelectedModelsList
               providers={providers}

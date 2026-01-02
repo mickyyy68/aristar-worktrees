@@ -28,6 +28,7 @@ interface AgentManagerState {
 
   // UI State
   isLoading: boolean;
+  isLoadingOpenCodeData: boolean;
   error: string | null;
 
   // Per-agent chat state
@@ -67,8 +68,10 @@ interface AgentManagerActions {
   sendFollowUp: (taskId: string, prompt: string, targetAgentIds?: string[]) => Promise<void>;
 
   // OpenCode data
-  loadProviders: (port: number) => Promise<void>;
-  loadAvailableAgents: (port: number) => Promise<void>;
+  loadProviders: (port: number) => Promise<OpenCodeProvider[]>;
+  loadAvailableAgents: (port: number) => Promise<OpenCodeAgentConfig[]>;
+  refreshOpenCodeData: (repoPath: string) => Promise<void>;
+  isLoadingOpenCodeData: boolean;
 
   // Navigation
   setActiveTask: (taskId: string | null) => void;
@@ -106,6 +109,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
       providers: [],
       availableAgents: [],
       isLoading: false,
+      isLoadingOpenCodeData: false,
       error: null,
       agentMessages: {},
       agentLoading: {},
@@ -578,23 +582,88 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
 
       // ============ OpenCode Data ============
 
-      loadProviders: async (port) => {
+      loadProviders: async (port): Promise<OpenCodeProvider[]> => {
         try {
           opencodeClient.connect(port);
+          
+          // Wait for server to be ready
+          const isReady = await opencodeClient.waitForReady();
+          if (!isReady) {
+            toast.error('OpenCode server not ready');
+            return [];
+          }
+          
           const data = await opencodeClient.getProviders();
           set({ providers: data.providers });
+          return data.providers;
         } catch (err) {
           console.error('[AgentManager] Failed to load providers:', err);
+          toast.error('Failed to load AI providers', { 
+            description: String(err) 
+          });
+          return [];
         }
       },
 
-      loadAvailableAgents: async (port) => {
+      loadAvailableAgents: async (port): Promise<OpenCodeAgentConfig[]> => {
         try {
           opencodeClient.connect(port);
           const agents = await opencodeClient.getAgents();
-          set({ availableAgents: agents });
+          // Map to OpenCodeAgentConfig format
+          const agentConfigs: OpenCodeAgentConfig[] = agents.map(a => ({
+            id: a.id,
+            name: a.name,
+            description: a.description,
+            mode: a.mode,
+          }));
+          set({ availableAgents: agentConfigs });
+          return agentConfigs;
         } catch (err) {
           console.error('[AgentManager] Failed to load agents:', err);
+          toast.error('Failed to load agents', { 
+            description: String(err) 
+          });
+          return [];
+        }
+      },
+
+      refreshOpenCodeData: async (repoPath: string) => {
+        set({ isLoadingOpenCodeData: true });
+        try {
+          // Start a temporary OpenCode server
+          const port = await commands.startOpencode(repoPath);
+          opencodeClient.connect(port);
+          
+          // Wait for server to be ready
+          const isReady = await opencodeClient.waitForReady();
+          if (!isReady) {
+            throw new Error('OpenCode server did not become ready');
+          }
+          
+          // Load both providers and agents
+          const providersData = await opencodeClient.getProviders();
+          const agents = await opencodeClient.getAgents();
+          
+          const agentConfigs: OpenCodeAgentConfig[] = agents.map(a => ({
+            id: a.id,
+            name: a.name,
+            description: a.description,
+            mode: a.mode,
+          }));
+          
+          set({ 
+            providers: providersData.providers, 
+            availableAgents: agentConfigs,
+            isLoadingOpenCodeData: false,
+          });
+          
+          toast.success('Providers and agents refreshed');
+        } catch (err) {
+          console.error('[AgentManager] Failed to refresh OpenCode data:', err);
+          set({ isLoadingOpenCodeData: false });
+          toast.error('Failed to refresh providers and agents', { 
+            description: String(err) 
+          });
         }
       },
 
@@ -786,6 +855,8 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
         tasks: state.tasks,
         activeTaskId: state.activeTaskId,
         activeAgentId: state.activeAgentId,
+        providers: state.providers,
+        availableAgents: state.availableAgents,
       }),
     }
   )

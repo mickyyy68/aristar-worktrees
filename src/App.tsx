@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useAppStore } from '@/store/use-app-store';
+import { useAgentManagerStore } from '@/store/agent-manager-store';
 import { Header } from '@/components/header';
 import { RepositorySidebar } from '@/components/repository-sidebar';
 import { WorktreeCard } from '@/components/worktree-card';
@@ -42,6 +43,29 @@ function App() {
 
   useEffect(() => {
     useAppStore.getState().loadRepositories();
+  }, []);
+
+  // Load OpenCode providers and agents on startup when we have a repository
+  useEffect(() => {
+    const loadOpenCodeData = async () => {
+      const { providers, refreshOpenCodeData } = useAgentManagerStore.getState();
+      const { repositories, selectedRepositoryId } = useAppStore.getState();
+      
+      // If we already have providers cached, skip loading
+      if (providers.length > 0) {
+        console.log('[App] OpenCode providers already loaded, skipping');
+        return;
+      }
+      
+      // Find a repository to use for loading OpenCode data
+      const repo = repositories.find(r => r.id === selectedRepositoryId) || repositories[0];
+      if (repo) {
+        console.log('[App] Loading OpenCode providers and agents...');
+        await refreshOpenCodeData(repo.path);
+      }
+    };
+    
+    loadOpenCodeData();
   }, []);
 
   const handleAddRepository = async () => {
