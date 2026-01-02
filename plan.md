@@ -42,9 +42,21 @@ TASK = A goal/prompt to accomplish
 
 ### Architecture Decisions
 - **Storage**: `~/.aristar-worktrees/tasks/` for task folders and metadata
-- **OpenCode Server**: One server per task (all agents share one server, each agent is a session)
+- **OpenCode Server**: One server per agent (each agent's worktree is the working directory for proper git context isolation)
 - **UI**: Full-page Agent Manager view (toggled from header)
 - **Persistence**: Tasks persist in `tasks.json` with full metadata
+
+### OpenCode API Reference (Verified)
+Key endpoints used:
+- `GET /config/providers` - List providers and default models
+- `GET /agent` - List available agents
+- `GET /session` - List sessions
+- `POST /session` - Create session with `{ parentID?, title? }`
+- `POST /session/:id/message` - Send message with `{ parts, model?, agent? }`
+- `POST /session/:id/abort` - Abort running session
+- `GET /event` - SSE stream for real-time updates
+
+Model format: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4"`)
 
 ### Design Decisions
 - **Repository selection**: Agent Manager has its own repository selector (independent of Worktrees view)
@@ -180,19 +192,23 @@ TASK = A goal/prompt to accomplish
   - Parameters: `task_id`
   - Deletes worktrees for non-accepted agents
 
-### 2.4 Task OpenCode Integration
-- [ ] Implement `start_task_opencode` command:
-  - Parameters: `task_id`
-  - Starts OpenCode server for the task (uses task folder as working dir)
+### 2.4 Agent OpenCode Integration
+- [ ] Implement `start_agent_opencode` command:
+  - Parameters: `task_id`, `agent_id`
+  - Starts OpenCode server for the agent (uses agent's worktree as working dir)
   - Returns port number
 
-- [ ] Implement `stop_task_opencode` command:
-  - Parameters: `task_id`
-  - Stops OpenCode server for the task
+- [ ] Implement `stop_agent_opencode` command:
+  - Parameters: `task_id`, `agent_id`
+  - Stops OpenCode server for the agent
 
-- [ ] Implement `get_task_opencode_port` command:
-  - Parameters: `task_id`
+- [ ] Implement `get_agent_opencode_port` command:
+  - Parameters: `task_id`, `agent_id`
   - Returns port if running, null otherwise
+
+- [ ] Implement `stop_task_all_opencode` command:
+  - Parameters: `task_id`
+  - Stops all OpenCode servers for all agents in the task
 
 ### 2.5 Register Commands
 - [ ] Add all new commands to `src-tauri/src/main.rs` invoke_handler
@@ -205,22 +221,28 @@ TASK = A goal/prompt to accomplish
 ### 3.1 Extend OpenCode Client
 - [ ] Add to `src/lib/opencode.ts`:
   ```typescript
-  // Provider & Model fetching
+  // Provider & Model fetching (GET /config/providers, GET /agent)
   async getProviders(): Promise<{ providers: OpenCodeProvider[]; default: Record<string, string> }>
-  async getAgents(): Promise<OpenCodeAgent[]>
+  async getAgents(): Promise<OpenCodeAgentInfo[]>
   
-  // Session with model/agent support
+  // Session with model/agent support (POST /session/:id/message)
+  // Note: model is a single string "provider/model-id" format
   async sendPromptWithOptions(prompt: string, options: {
-    model?: { providerID: string; modelID: string };
+    model?: string;  // e.g., "anthropic/claude-sonnet-4"
     agent?: string;
   }): Promise<OpenCodeMessage>
   
-  // Session management
-  async createSessionForAgent(title: string, agentId: string): Promise<OpenCodeSession>
-  async abortSession(sessionId: string): Promise<void>
+  // Async prompt (POST /session/:id/prompt_async) - returns immediately
+  async sendPromptAsync(prompt: string, options?: { model?: string; agent?: string }): Promise<void>
   
-  // Event subscription
+  // Session management (POST /session/:id/abort)
+  async abortSession(sessionId: string): Promise<boolean>
+  
+  // Event subscription (GET /event - SSE stream)
   subscribeToEvents(onEvent: (event: any) => void): () => void
+  
+  // Extended messages with parts
+  async getSessionMessagesExtended(): Promise<OpenCodeMessageExtended[]>
   ```
 
 ### 3.2 Add Message Types
@@ -322,11 +344,12 @@ TASK = A goal/prompt to accomplish
   export async function cleanupUnacceptedAgents(...): Promise<void>
   ```
 
-- [ ] Add task OpenCode commands:
+- [ ] Add agent OpenCode commands:
   ```typescript
-  export async function startTaskOpencode(taskId: string): Promise<number>
-  export async function stopTaskOpencode(taskId: string): Promise<void>
-  export async function getTaskOpencodePort(taskId: string): Promise<number | null>
+  export async function startAgentOpencode(taskId: string, agentId: string): Promise<number>
+  export async function stopAgentOpencode(taskId: string, agentId: string): Promise<void>
+  export async function getAgentOpencodePort(taskId: string, agentId: string): Promise<number | null>
+  export async function stopTaskAllOpencode(taskId: string): Promise<void>
   ```
 
 ---
