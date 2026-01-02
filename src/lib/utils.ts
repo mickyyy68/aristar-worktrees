@@ -38,3 +38,9 @@ export function formatDate(timestamp: number): string {
     minute: '2-digit',
   });
 }
+
+export type IconCategory = 'terminals' | 'editors';
+
+export function getIconPath(category: IconCategory, name: string): string {
+  return `/src/assets/${category}/${name}`;
+}

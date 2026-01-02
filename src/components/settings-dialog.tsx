@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { AppIcon } from '@/components/ui/app-icon';
 import { useAppStore } from '@/store/use-app-store';
 import type { TerminalApp, EditorApp } from '@/store/types';
 
@@ -60,22 +61,21 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   // Terminal options with display names and notes
   const terminalOptions = [
-    { value: 'terminal', label: 'Terminal.app', icon: '🖥️', note: 'Opens new window' },
-    { value: 'ghostty', label: 'Ghostty', icon: '👻', note: 'Opens new tab in existing instance' },
-    { value: 'alacritty', label: 'Alacritty', icon: '🚀', note: 'Opens new window (tabs not supported via CLI)' },
-    { value: 'kitty', label: 'Kitty', icon: '🐱', note: 'Opens in existing instance' },
-    { value: 'iterm', label: 'iTerm2', icon: '💻', note: 'Opens new window' },
-    { value: 'warp', label: 'Warp', icon: '⚡', note: 'Opens new tab' },
-    { value: 'custom', label: 'Custom', icon: '⚙️', note: undefined },
+    { value: 'terminal', label: 'Terminal.app', icon: 'terminal', fallback: '🖥️', note: 'Opens new window' },
+    { value: 'ghostty', label: 'Ghostty', icon: 'ghostty', fallback: '👻', note: 'Opens new tab in existing instance' },
+    { value: 'alacritty', label: 'Alacritty', icon: 'alacritty', fallback: '🚀', note: 'Opens new window (tabs not supported via CLI)' },
+    { value: 'kitty', label: 'Kitty', icon: 'kitty', fallback: '🐱', note: 'Opens in existing instance' },
+    { value: 'iterm', label: 'iTerm2', icon: 'iterm', fallback: '💻', note: 'Opens new window' },
+    { value: 'warp', label: 'Warp', icon: 'warp', fallback: '⚡', note: 'Opens new tab' },
+    { value: 'custom', label: 'Custom', icon: 'custom', fallback: '⚙️', note: undefined },
   ];
 
-  // Editor options with display names
   const editorOptions = [
-    { value: 'vscode', label: 'VS Code', icon: '💙' },
-    { value: 'cursor', label: 'Cursor', icon: '🖱️' },
-    { value: 'zed', label: 'Zed', icon: '⚡' },
-    { value: 'antigravity', label: 'Antigravity', icon: '🚀' },
-    { value: 'custom', label: 'Custom', icon: '⚙️' },
+    { value: 'vscode', label: 'VS Code', icon: 'vscode', fallback: '💙' },
+    { value: 'cursor', label: 'Cursor', icon: 'cursor', fallback: '🖱️' },
+    { value: 'zed', label: 'Zed', icon: 'zed', fallback: '⚡' },
+    { value: 'antigravity', label: 'Antigravity', icon: 'antigravity', fallback: '🚀' },
+    { value: 'custom', label: 'Custom', icon: 'custom', fallback: '⚙️' },
   ];
 
   return (
@@ -109,7 +109,11 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   {terminalOptions.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       <span className="flex items-center gap-2">
-                        <span>{opt.icon}</span>
+                        {opt.icon ? (
+                          <AppIcon category="terminals" name={opt.icon} fallback={opt.fallback} size={18} />
+                        ) : (
+                          <span>{opt.fallback}</span>
+                        )}
                         <span>{opt.label}</span>
                       </span>
                     </SelectItem>
@@ -158,7 +162,11 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   {editorOptions.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       <span className="flex items-center gap-2">
-                        <span>{opt.icon}</span>
+                        {opt.icon ? (
+                          <AppIcon category="editors" name={opt.icon} fallback={opt.fallback} size={18} />
+                        ) : (
+                          <span>{opt.fallback}</span>
+                        )}
                         <span>{opt.label}</span>
                       </span>
                     </SelectItem>

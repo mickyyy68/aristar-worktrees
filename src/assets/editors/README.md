@@ -1,9 +1,9 @@
 # Editor Icons
 
-Place code editor application icons here. Supported formats: PNG, SVG
+Place code editor application icons here. Supported formats: PNG, SVG, ICNS
 
 Expected files:
-- vscode.png (or .svg) - Visual Studio Code
-- cursor.png (or .svg) - Cursor
-- zed.png (or .svg) - Zed
-- antigravity.png (or .svg) - Antigravity
+- vscode.png (or .svg, .icns) - Visual Studio Code
+- cursor.png (or .svg, .icns) - Cursor
+- zed.png (or .svg, .icns) - Zed
+- antigravity.png (or .svg, .icns) - Antigravity
