@@ -32,6 +32,7 @@ function App() {
   const [worktreeToRename, setWorktreeToRename] = useState<WorktreeMetadata | null>(null);
   const [worktreeToDelete, setWorktreeToDelete] = useState<WorktreeMetadata | null>(null);
   const [deleteBranch, setDeleteBranch] = useState(true);
+  const [repositoryToDelete, setRepositoryToDelete] = useState<string | null>(null);
 
   const selectedRepo = repositories.find(r => r.id === selectedRepositoryId);
 
@@ -58,9 +59,14 @@ function App() {
     setSelectedRepository(id);
   };
 
-  const handleRemoveRepository = async (id: string) => {
-    if (confirm('Are you sure you want to remove this repository?')) {
-      await removeRepository(id);
+  const handleRemoveRepository = (id: string) => {
+    setRepositoryToDelete(id);
+  };
+
+  const confirmDeleteRepository = async () => {
+    if (repositoryToDelete) {
+      await removeRepository(repositoryToDelete);
+      setRepositoryToDelete(null);
     }
   };
 
@@ -239,6 +245,27 @@ function App() {
               </Button>
               <Button variant="destructive" onClick={confirmDelete}>
                 Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {repositoryToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg bg-card p-6 shadow-lg">
+            <h3 className="mb-2 text-lg font-semibold">Remove Repository</h3>
+            <p className="mb-4 text-muted-foreground">
+              Are you sure you want to remove this repository from the list?
+              This will not delete any files on disk.
+            </p>
+            
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRepositoryToDelete(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={confirmDeleteRepository}>
+                Remove
               </Button>
             </div>
           </div>
