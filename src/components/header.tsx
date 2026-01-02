@@ -1,6 +1,8 @@
-import { FolderGit2, Plus, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { FolderGit2, Plus, RefreshCw, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { SettingsDialog } from '@/components/settings-dialog';
 import { useAppStore } from '@/store/use-app-store';
 import { getRepositoryName } from '@/lib/utils';
 
@@ -10,6 +12,7 @@ interface HeaderProps {
 
 export function Header({ onAddRepository }: HeaderProps) {
   const { selectedRepositoryId, repositories, refreshRepository } = useAppStore();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   
   const selectedRepo = repositories.find(r => r.id === selectedRepositoryId);
 
@@ -44,9 +47,17 @@ export function Header({ onAddRepository }: HeaderProps) {
             <Plus className="mr-2 h-4 w-4" />
             Add Repository
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
           <ThemeToggle />
         </div>
       </div>
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </header>
   );
 }

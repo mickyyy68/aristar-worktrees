@@ -281,13 +281,21 @@ pub fn get_commits(repo_path: String, limit: Option<usize>) -> Result<Vec<Commit
 }
 
 #[tauri::command]
-pub fn open_in_terminal(path: String) -> Result<(), String> {
-    worktree::open_in_terminal(&path)
+pub fn open_in_terminal(
+    path: String,
+    app: String,
+    custom_command: Option<String>,
+) -> Result<(), String> {
+    worktree::open_in_terminal(&path, &app, custom_command.as_deref())
 }
 
 #[tauri::command]
-pub fn open_in_editor(path: String) -> Result<(), String> {
-    worktree::open_in_editor(&path)
+pub fn open_in_editor(
+    path: String,
+    app: String,
+    custom_command: Option<String>,
+) -> Result<(), String> {
+    worktree::open_in_editor(&path, &app, custom_command.as_deref())
 }
 
 #[tauri::command]

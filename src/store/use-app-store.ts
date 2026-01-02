@@ -43,11 +43,13 @@ interface AppState {
 const defaultSettings: AppSettings = {
   theme: 'system',
   autoRefresh: true,
+  terminalApp: 'terminal',
+  editorApp: 'vscode',
 };
 
 export const useAppStore = create<AppState>()(
     persist(
-      (set) => ({
+      (set, get) => ({
       repositories: [],
       settings: defaultSettings,
       selectedRepositoryId: null,
@@ -218,7 +220,12 @@ export const useAppStore = create<AppState>()(
 
       openInTerminal: async (path) => {
         try {
-          await commands.openInTerminal(path);
+          const { settings } = get();
+          await commands.openInTerminal(
+            path,
+            settings.terminalApp,
+            settings.customTerminalCommand
+          );
         } catch (err) {
           set({ error: String(err) });
         }
@@ -226,7 +233,12 @@ export const useAppStore = create<AppState>()(
 
       openInEditor: async (path) => {
         try {
-          await commands.openInEditor(path);
+          const { settings } = get();
+          await commands.openInEditor(
+            path,
+            settings.editorApp,
+            settings.customEditorCommand
+          );
         } catch (err) {
           set({ error: String(err) });
         }

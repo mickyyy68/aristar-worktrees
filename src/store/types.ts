@@ -30,10 +30,17 @@ export interface CreateWorktreeRequest {
   executeScriptOnCreate: boolean;
 }
 
+export type TerminalApp = 'terminal' | 'ghostty' | 'alacritty' | 'kitty' | 'iterm' | 'warp' | 'custom';
+export type EditorApp = 'vscode' | 'cursor' | 'zed' | 'antigravity' | 'custom';
+
 export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
   defaultBasePath?: string;
   autoRefresh: boolean;
+  terminalApp: TerminalApp;
+  customTerminalCommand?: string;
+  editorApp: EditorApp;
+  customEditorCommand?: string;
 }
 
 export interface StoreData {

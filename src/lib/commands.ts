@@ -63,12 +63,20 @@ export async function unlockWorktree(path: string): Promise<void> {
   return await invoke('unlock_worktree', { path });
 }
 
-export async function openInTerminal(path: string): Promise<void> {
-  return await invoke('open_in_terminal', { path });
+export async function openInTerminal(
+  path: string,
+  app: string,
+  customCommand?: string
+): Promise<void> {
+  return await invoke('open_in_terminal', { path, app, customCommand });
 }
 
-export async function openInEditor(path: string): Promise<void> {
-  return await invoke('open_in_editor', { path });
+export async function openInEditor(
+  path: string,
+  app: string,
+  customCommand?: string
+): Promise<void> {
+  return await invoke('open_in_editor', { path, app, customCommand });
 }
 
 export async function revealInFinder(path: string): Promise<void> {

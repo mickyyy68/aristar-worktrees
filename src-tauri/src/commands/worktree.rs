@@ -535,49 +535,176 @@ fn find_git_repo_root(path: &str) -> Result<String, String> {
     Ok(git_path.to_string_lossy().to_string())
 }
 
-pub fn open_in_terminal(path: &str) -> Result<(), String> {
+pub fn open_in_terminal(path: &str, app: &str, custom_command: Option<&str>) -> Result<(), String> {
     let escaped_path = path.replace('"', "\\\"");
-    let script = format!(
-        "tell application \"Terminal\" to do script \"cd \\\"{}\\\" && clear\"",
-        escaped_path
-    );
 
-    let output = Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
-        .output()
-        .map_err(|e| e.to_string())?;
+    match app {
+        "terminal" => {
+            let script = format!(
+                "tell application \"Terminal\" to do script \"cd \\\"{}\\\" && clear\"",
+                escaped_path
+            );
 
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+            let output = Command::new("osascript")
+                .arg("-e")
+                .arg(&script)
+                .output()
+                .map_err(|e| e.to_string())?;
+
+            if !output.status.success() {
+                return Err(String::from_utf8_lossy(&output.stderr).to_string());
+            }
+        }
+        "ghostty" => {
+            // Use `open -a Ghostty` which automatically opens a new tab in existing instance
+            // or launches a new instance if none is running
+            Command::new("open")
+                .args(["-a", "Ghostty", path])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+        "alacritty" => {
+            // Try to create window in existing Alacritty instance via IPC
+            // Use full path since Tauri apps don't have shell PATH
+            let alacritty_paths = [
+                "/opt/homebrew/bin/alacritty",
+                "/usr/local/bin/alacritty",
+                "/Applications/Alacritty.app/Contents/MacOS/alacritty",
+            ];
+
+            let alacritty_bin = alacritty_paths
+                .iter()
+                .find(|p| std::path::Path::new(p).exists())
+                .ok_or_else(|| {
+                    "Alacritty not found. Please install it via Homebrew or from alacritty.org"
+                        .to_string()
+                })?;
+
+            // Try IPC first to create window in existing instance
+            let msg_result = Command::new(alacritty_bin)
+                .args(["msg", "create-window", "--working-directory", path])
+                .output();
+
+            match msg_result {
+                Ok(output) if output.status.success() => {
+                    // Success - window created in existing instance
+                }
+                _ => {
+                    // No existing instance or IPC failed - spawn new one
+                    Command::new(alacritty_bin)
+                        .arg("--working-directory")
+                        .arg(path)
+                        .spawn()
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        "kitty" => {
+            // Try common Kitty installation paths since Tauri apps don't have shell PATH
+            let kitty_paths = [
+                "/opt/homebrew/bin/kitty",
+                "/usr/local/bin/kitty",
+                "/Applications/kitty.app/Contents/MacOS/kitty",
+            ];
+
+            let kitty_bin = kitty_paths
+                .iter()
+                .find(|p| std::path::Path::new(p).exists())
+                .ok_or_else(|| "Kitty not found. Please install it via Homebrew or from sw.kovidgoyal.net/kitty".to_string())?;
+
+            Command::new(kitty_bin)
+                .arg("--single-instance")
+                .arg("--directory")
+                .arg(path)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+        "iterm" => {
+            let script = format!(
+                "tell application \"iTerm2\" to create window with default profile command \"cd \\\"{}\\\" && clear\"",
+                escaped_path
+            );
+
+            let output = Command::new("osascript")
+                .arg("-e")
+                .arg(&script)
+                .output()
+                .map_err(|e| e.to_string())?;
+
+            if !output.status.success() {
+                return Err(String::from_utf8_lossy(&output.stderr).to_string());
+            }
+        }
+        "warp" => {
+            Command::new("open")
+                .arg("-a")
+                .arg("Warp")
+                .arg(path)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+        "custom" => {
+            if let Some(cmd) = custom_command {
+                Command::new(cmd)
+                    .arg(path)
+                    .spawn()
+                    .map_err(|e| e.to_string())?;
+            } else {
+                return Err("custom_command is required when app is 'custom'".to_string());
+            }
+        }
+        _ => {
+            return Err(format!("Unknown terminal app: {}", app));
+        }
     }
 
     Ok(())
 }
 
-pub fn open_in_editor(path: &str) -> Result<(), String> {
-    let editors = vec!["code", "idea", "nvim", "vim", "emacs"];
-
-    for editor in editors {
-        if Command::new(editor)
-            .arg("--version")
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .is_ok()
-        {
-            Command::new(editor)
-                .arg(path)
+pub fn open_in_editor(path: &str, app: &str, custom_command: Option<&str>) -> Result<(), String> {
+    match app {
+        "vscode" => {
+            // Use `open -a` for VS Code since CLI may not be in PATH
+            Command::new("open")
+                .args(["-a", "Visual Studio Code", path])
                 .spawn()
                 .map_err(|e| e.to_string())?;
-            return Ok(());
+        }
+        "cursor" => {
+            // Use `open -a` for Cursor since CLI may not be in PATH
+            Command::new("open")
+                .args(["-a", "Cursor", path])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+        "zed" => {
+            // Use `open -a` for Zed since CLI may not be in PATH
+            Command::new("open")
+                .args(["-a", "Zed", path])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+        "antigravity" => {
+            // Use `open -a` for Antigravity since CLI may not be in PATH
+            Command::new("open")
+                .args(["-a", "Antigravity", path])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+        "custom" => {
+            if let Some(cmd) = custom_command {
+                Command::new(cmd)
+                    .arg(path)
+                    .spawn()
+                    .map_err(|e| e.to_string())?;
+            } else {
+                return Err("custom_command is required when app is 'custom'".to_string());
+            }
+        }
+        _ => {
+            return Err(format!("Unknown editor app: {}", app));
         }
     }
-
-    Command::new("open")
-        .arg(path)
-        .spawn()
-        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
