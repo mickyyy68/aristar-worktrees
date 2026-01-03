@@ -40,9 +40,10 @@ cargo test
 cargo test test_get_repository_name_simple_path
 
 # Run tests in a specific module
-cargo test worktree_unit_tests
-cargo test state_tests
-cargo test worktree_integration_tests
+cargo test tests::worktrees::operations_tests
+cargo test tests::worktrees::store_tests
+cargo test tests::worktrees::integration_tests
+cargo test tests::agent_manager::task_tests
 
 # Run tests with output
 cargo test -- --nocapture
@@ -58,25 +59,57 @@ cargo clippy
 
 ```
 src/                     # React frontend (TypeScript)
-├── components/          # React components
-│   ├── ui/              # shadcn/ui base components (don't modify)
-│   ├── agent-manager/   # Agent Manager feature components
-│   │   ├── tool-config.ts        # Tool icons/colors configuration
-│   │   ├── tool-call-display.tsx # Individual tool display
-│   │   ├── tools-section.tsx     # Tool grouping wrapper
-│   │   └── *.tsx                 # Other agent manager components
-│   └── *.tsx            # App components
-├── lib/                 # Utilities and helpers
-├── store/               # Zustand state management
-│   └── types/           # Type definitions by feature
-└── assets/              # Static assets
+├── modules/
+│   ├── core/            # Shared infrastructure
+│   │   ├── ui/          # shadcn/ui base components (don't modify)
+│   │   ├── lib/         # utils.ts, commands.ts
+│   │   ├── components/  # Header, SettingsDialog, ThemeToggle
+│   │   └── index.ts     # Public exports
+│   ├── worktrees/       # Git worktree management
+│   │   ├── components/  # WorktreeCard, CreateWorktreeDialog, etc.
+│   │   ├── lib/         # branch-colors.ts
+│   │   └── index.ts     # Public exports
+│   └── agent-manager/   # AI agent orchestration
+│       ├── components/
+│       │   ├── chat/    # ChatView, ChatMessage, ChatInput
+│       │   └── tools/   # ToolCallDisplay, ToolsSection, tool-config
+│       ├── api/         # opencode.ts, use-agent-sse.ts
+│       ├── store/       # agent-manager-store.ts, types.ts
+│       └── index.ts     # Public exports
+├── store/               # Shared Zustand state (use-app-store.ts, types.ts)
+├── assets/              # Static assets
+├── App.tsx
+├── main.tsx
+└── index.css
 
 src-tauri/src/           # Rust backend
-├── commands/            # Tauri command handlers
-│   ├── mod.rs           # Command definitions
-│   ├── worktree.rs      # Git operations
-│   └── tests/           # Test modules
-└── main.rs              # App entry point
+├── main.rs              # App entry point
+├── lib.rs               # Library exports
+├── core/                # Shared infrastructure
+│   ├── mod.rs           # Module exports
+│   ├── persistence.rs   # Store load/save utilities
+│   ├── system.rs        # System operations (clipboard, finder)
+│   └── types.rs         # Shared types (AppSettings)
+├── worktrees/           # Worktree management
+│   ├── mod.rs           # Module exports
+│   ├── types.rs         # WorktreeInfo, Repository, etc.
+│   ├── operations.rs    # Git worktree operations
+│   ├── external_apps.rs # Terminal/editor integration
+│   ├── store.rs         # Worktree state (AppState)
+│   └── commands.rs      # Tauri commands
+├── agent_manager/       # Agent manager
+│   ├── mod.rs           # Module exports
+│   ├── types.rs         # Task, TaskAgent, etc.
+│   ├── task_operations.rs # Task CRUD
+│   ├── agent_operations.rs # Agent management
+│   ├── opencode.rs      # OpenCode process manager
+│   ├── store.rs         # Task state (TaskManagerState)
+│   └── commands.rs      # Tauri commands
+└── tests/               # Centralized tests
+    ├── mod.rs           # Test module exports
+    ├── helpers.rs       # Test utilities (TestRepo)
+    ├── worktrees/       # Worktree tests
+    └── agent_manager/   # Agent manager tests
 ```
 
 ## Code Style Guidelines
@@ -86,20 +119,33 @@ src-tauri/src/           # Rust backend
 **Imports** - Order imports as follows:
 1. React imports (`import { useState } from 'react'`)
 2. External libraries (`import { open } from '@tauri-apps/plugin-dialog'`)
-3. UI components (`import { Button } from '@/components/ui/button'`)
-4. App components (`import { Header } from '@/components/header'`)
-5. Store/hooks (`import { useAppStore } from '@/store/use-app-store'`)
-6. Utils (`import { cn } from '@/lib/utils'`)
-7. Types (`import type { WorktreeMetadata } from '@/store/types'`)
+3. UI components (`import { Button } from '@core/ui'`)
+4. App components (`import { Header } from '@core/components'`)
+5. Feature components (`import { WorktreeCard } from '@worktrees/components'`)
+6. Store/hooks (`import { useAppStore } from '@/store/use-app-store'`)
+7. Utils (`import { cn } from '@core/lib'`)
+8. Types (`import type { WorktreeMetadata } from '@/store/types'`)
 
-**Path Aliases** - Always use `@/` alias for imports from `src/`:
+**Path Aliases** - Use feature-specific aliases for module imports:
 ```typescript
-// Good
-import { Button } from '@/components/ui/button';
+// Good - use feature aliases
+import { Button } from '@core/ui';
+import { cn } from '@core/lib';
+import { WorktreeCard } from '@worktrees/components';
+import { ChatView } from '@agent-manager/components/chat';
 
-// Bad
-import { Button } from '../../components/ui/button';
+// Good - use @/ for shared store
+import { useAppStore } from '@/store/use-app-store';
+
+// Bad - relative imports
+import { Button } from '../../modules/core/ui/button';
 ```
+
+**Available Path Aliases**:
+- `@core/*` -> `src/modules/core/*`
+- `@worktrees/*` -> `src/modules/worktrees/*`
+- `@agent-manager/*` -> `src/modules/agent-manager/*`
+- `@/*` -> `src/*` (for shared store, assets, etc.)
 
 **Component Structure**:
 ```typescript
@@ -157,19 +203,19 @@ pub fn command_name(
 ```
 
 **Testing**:
-- Place tests in `src/commands/tests/`
+- Place tests in `src-tauri/src/tests/`
 - Use `TestRepo` helper for git repository fixtures
 - Name tests descriptively: `test_<function>_<scenario>`
 
 ## UI Components
 
-Use **shadcn/ui** components from `src/components/ui/`. These are pre-configured with Radix UI and Tailwind CSS.
+Use **shadcn/ui** components from `src/modules/core/ui/`. These are pre-configured with Radix UI and Tailwind CSS.
 
 Available components: `Button`, `Card`, `Dialog`, `DropdownMenu`, `Input`, `Label`, `ScrollArea`, `Select`, `Separator`, `Switch`, `Textarea`, `Tooltip`
 
 **Styling**: Use Tailwind CSS classes. Use `cn()` utility for conditional classes:
 ```typescript
-import { cn } from '@/lib/utils';
+import { cn } from '@core/lib';
 <div className={cn('base-class', condition && 'conditional-class')} />
 ```
 
@@ -183,9 +229,9 @@ const { repositories, settings, addRepository } = useAppStore();
 
 ## Tauri Commands
 
-Call Rust backend via `src/lib/commands.ts`:
+Call Rust backend via `src/modules/core/lib/commands.ts`:
 ```typescript
-import * as commands from '@/lib/commands';
+import * as commands from '@core/lib/commands';
 const repos = await commands.getRepositories();
 ```
 

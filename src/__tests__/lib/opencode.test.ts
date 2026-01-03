@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { opencodeClient } from '@/lib/opencode';
+import { opencodeClient } from '@agent-manager/api';
 import { createMockSSEServer, MockSSEServer } from '../mocks/mock-sse-server';
 import {
   messageUpdatedAssistant,

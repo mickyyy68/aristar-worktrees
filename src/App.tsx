@@ -2,20 +2,14 @@ import { useState, useEffect } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { FolderGit2, Plus, AlertTriangle } from 'lucide-react';
 import { Toaster } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
+import { Button, ScrollArea, Switch, Label } from '@core/ui';
 import { useAppStore } from '@/store/use-app-store';
-import { useAgentManagerStore } from '@/store/agent-manager-store';
-import { Header } from '@/components/header';
-import { RepositorySidebar } from '@/components/repository-sidebar';
-import { WorktreeCard } from '@/components/worktree-card';
-import { CreateWorktreeDialog } from '@/components/create-worktree-dialog';
-import { RenameDialog } from '@/components/rename-dialog';
-import { OpenCodePanel } from '@/components/opencode-panel';
-import { AgentManagerView } from '@/components/agent-manager/agent-manager-view';
-import { isProtectedBranch } from '@/lib/branch-colors';
+import { useAgentManagerStore } from '@agent-manager/store';
+import { Header } from '@core/components';
+import { RepositorySidebar, WorktreeCard, CreateWorktreeDialog, RenameDialog } from '@worktrees/components';
+import { isProtectedBranch } from '@worktrees/lib';
+import { OpenCodePanel } from '@agent-manager/components/opencode-panel';
+import { AgentManagerView } from '@agent-manager/components';
 import type { WorktreeMetadata } from '@/store/types';
 
 function App() {

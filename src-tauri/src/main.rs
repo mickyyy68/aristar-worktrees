@@ -3,8 +3,12 @@
     windows_subsystem = "windows"
 )]
 
-mod commands;
-mod models;
+mod agent_manager;
+mod core;
+mod worktrees;
+
+#[cfg(test)]
+mod tests;
 
 use tauri::Manager;
 
@@ -13,54 +17,54 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(commands::init_store())
-        .manage(commands::OpenCodeManager::new())
-        .manage(commands::TaskManagerState::new())
+        .manage(worktrees::init_store())
+        .manage(agent_manager::OpenCodeManager::new())
+        .manage(agent_manager::TaskManagerState::new())
         .invoke_handler(tauri::generate_handler![
             // Repository commands
-            commands::get_repositories,
-            commands::add_repository,
-            commands::remove_repository,
-            commands::refresh_repository,
+            worktrees::commands::get_repositories,
+            worktrees::commands::add_repository,
+            worktrees::commands::remove_repository,
+            worktrees::commands::refresh_repository,
             // Worktree commands
-            commands::list_worktrees,
-            commands::create_worktree,
-            commands::remove_worktree,
-            commands::rename_worktree,
-            commands::lock_worktree,
-            commands::unlock_worktree,
-            commands::get_branches,
-            commands::get_commits,
+            worktrees::commands::list_worktrees,
+            worktrees::commands::create_worktree,
+            worktrees::commands::remove_worktree,
+            worktrees::commands::rename_worktree,
+            worktrees::commands::lock_worktree,
+            worktrees::commands::unlock_worktree,
+            worktrees::commands::get_branches,
+            worktrees::commands::get_commits,
             // System commands
-            commands::open_in_terminal,
-            commands::open_in_editor,
-            commands::reveal_in_finder,
-            commands::copy_to_clipboard,
+            worktrees::commands::open_in_terminal,
+            worktrees::commands::open_in_editor,
+            worktrees::commands::reveal_in_finder,
+            worktrees::commands::copy_to_clipboard,
             // OpenCode commands (for worktrees)
-            commands::start_opencode,
-            commands::stop_opencode,
-            commands::get_opencode_status,
-            commands::is_opencode_running,
+            agent_manager::commands::start_opencode,
+            agent_manager::commands::stop_opencode,
+            agent_manager::commands::get_opencode_status,
+            agent_manager::commands::is_opencode_running,
             // Task Manager commands
-            commands::create_task,
-            commands::get_tasks,
-            commands::get_task,
-            commands::update_task,
-            commands::delete_task,
-            commands::add_agent_to_task,
-            commands::remove_agent_from_task,
-            commands::update_agent_session,
-            commands::update_agent_status,
-            commands::accept_agent,
-            commands::cleanup_unaccepted_agents,
+            agent_manager::commands::create_task,
+            agent_manager::commands::get_tasks,
+            agent_manager::commands::get_task,
+            agent_manager::commands::update_task,
+            agent_manager::commands::delete_task,
+            agent_manager::commands::add_agent_to_task,
+            agent_manager::commands::remove_agent_from_task,
+            agent_manager::commands::update_agent_session,
+            agent_manager::commands::update_agent_status,
+            agent_manager::commands::accept_agent,
+            agent_manager::commands::cleanup_unaccepted_agents,
             // Agent OpenCode commands
-            commands::start_agent_opencode,
-            commands::stop_agent_opencode,
-            commands::get_agent_opencode_port,
-            commands::stop_task_all_opencode,
+            agent_manager::commands::start_agent_opencode,
+            agent_manager::commands::stop_agent_opencode,
+            agent_manager::commands::get_agent_opencode_port,
+            agent_manager::commands::stop_task_all_opencode,
             // Worktree validation commands
-            commands::validate_task_worktrees,
-            commands::recreate_agent_worktree,
+            agent_manager::commands::validate_task_worktrees,
+            agent_manager::commands::recreate_agent_worktree,
         ])
         .setup(|_app| {
             println!("[main] App setup completed");
@@ -68,7 +72,7 @@ fn main() {
         })
         .on_window_event(|_app, event| {
             if let tauri::WindowEvent::Destroyed = event {
-                if let Some(manager) = _app.try_state::<commands::OpenCodeManager>() {
+                if let Some(manager) = _app.try_state::<agent_manager::OpenCodeManager>() {
                     println!("[main] Cleaning up OpenCode processes...");
                     manager.stop_all();
                 }

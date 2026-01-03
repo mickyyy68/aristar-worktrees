@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Repository, AppSettings, ActiveView } from '@/store/types';
-import * as commands from '@/lib/commands';
-import { opencodeClient, type OpenCodeMessage } from '@/lib/opencode';
+import { commands } from '@core/lib';
+import { opencodeClient, type OpenCodeMessage } from '@agent-manager/api';
 
 interface OpenCodeState {
   isOpencodePanelOpen: boolean;

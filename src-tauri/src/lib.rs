@@ -3,9 +3,14 @@
     windows_subsystem = "windows"
 )]
 
-mod commands;
-pub mod models;
+pub mod agent_manager;
+pub mod core;
+pub mod worktrees;
 
-pub use commands::opencode_manager::OpenCodeManager;
-pub use commands::task_manager::TaskManagerState;
-pub use commands::{init_store, AppState};
+#[cfg(test)]
+mod tests;
+
+// Re-export commonly used types and functions
+pub use agent_manager::{OpenCodeManager, TaskManagerState};
+pub use worktrees::init_store;
+pub use worktrees::store::AppState;

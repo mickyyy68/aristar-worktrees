@@ -4,28 +4,82 @@ This document provides a detailed overview of the Aristar Worktrees architecture
 
 ## Overview
 
-Aristar Worktrees is a desktop application built with Tauri, combining a React frontend with a Rust backend. The application manages Git worktrees across multiple repositories.
+Aristar Worktrees is a desktop application built with Tauri, combining a React frontend with a Rust backend. The application manages Git worktrees across multiple repositories and provides an AI agent manager for orchestrating coding tasks.
 
 ## Frontend Architecture
+
+### Modular Structure
+
+The frontend is organized into feature-based modules under `src/modules/`:
+
+```
+src/
+├── modules/
+│   ├── core/                    # Shared infrastructure
+│   │   ├── ui/                  # shadcn/ui components (14 files)
+│   │   ├── lib/                 # utils, commands
+│   │   ├── components/          # Header, SettingsDialog, ThemeToggle
+│   │   └── index.ts             # Public exports
+│   │
+│   ├── worktrees/               # Git worktree management
+│   │   ├── components/          # WorktreeCard, CreateWorktreeDialog, etc.
+│   │   ├── lib/                 # branch-colors
+│   │   └── index.ts             # Public exports
+│   │
+│   └── agent-manager/           # AI agent orchestration
+│       ├── components/
+│       │   ├── chat/            # ChatView, ChatMessage, ChatInput
+│       │   └── tools/           # ToolCallDisplay, ToolsSection
+│       ├── api/                 # OpenCode client, SSE handling
+│       ├── store/               # Agent manager state
+│       └── index.ts             # Public exports
+│
+├── store/                       # Shared app store
+├── assets/                      # Static assets
+├── App.tsx
+├── main.tsx
+└── index.css
+```
+
+### Path Aliases
+
+The codebase uses feature-specific path aliases for clean imports:
+
+| Alias | Target |
+|-------|--------|
+| `@core/*` | `src/modules/core/*` |
+| `@worktrees/*` | `src/modules/worktrees/*` |
+| `@agent-manager/*` | `src/modules/agent-manager/*` |
+| `@/*` | `src/*` |
 
 ### Component Hierarchy
 
 ```
 App.tsx
-├── Header
+├── Header (core)
 │   ├── SettingsDialog
 │   └── ThemeToggle
-├── RepositorySidebar
-├── WorktreeCard (multiple)
-├── CreateWorktreeDialog
-└── RenameDialog
+├── RepositorySidebar (worktrees)
+├── WorktreeCard (worktrees, multiple)
+├── CreateWorktreeDialog (worktrees)
+├── RenameDialog (worktrees)
+└── OpenCodePanel (agent-manager)
+    ├── TaskListSidebar
+    ├── AgentManagerView
+    │   ├── AgentTabs
+    │   ├── ChatView
+    │   │   ├── ChatMessage (multiple)
+    │   │   └── ChatInput
+    │   └── ToolsSection
+    │       └── ToolCallDisplay (multiple)
+    └── CreateTaskDialog
 ```
 
 ### State Management
 
 The application uses **Zustand** for state management with the `persist` middleware for localStorage persistence.
 
-**Store Structure** (`src/store/use-app-store.ts`):
+**Shared Store** (`src/store/use-app-store.ts`):
 
 ```typescript
 interface AppState {
@@ -56,9 +110,20 @@ interface AppState {
 }
 ```
 
+**Agent Manager Store** (`src/modules/agent-manager/store/agent-manager-store.ts`):
+
+```typescript
+interface AgentManagerState {
+  tasks: Task[];
+  selectedTaskId: string | null;
+  agents: Map<string, TaskAgent>;
+  // Actions for task/agent management
+}
+```
+
 ### UI Components
 
-All UI components are built using **shadcn/ui** (Radix UI + Tailwind CSS):
+All UI components are built using **shadcn/ui** (Radix UI + Tailwind CSS) and located in `src/modules/core/ui/`:
 
 | Component | Purpose |
 |-----------|---------|
@@ -74,6 +139,8 @@ All UI components are built using **shadcn/ui** (Radix UI + Tailwind CSS):
 | `Switch` | Toggle switches |
 | `Textarea` | Multi-line inputs |
 | `Tooltip` | Hover tooltips |
+| `MarkdownRenderer` | Markdown content display |
+| `AppIcon` | Application icons |
 
 ### Theming
 
@@ -86,7 +153,7 @@ Theming is implemented via CSS variables in `index.css` with Tailwind CSS v4.
 
 ### Branch Color System
 
-Branches are color-coded for visual organization (`src/lib/branch-colors.ts`):
+Branches are color-coded for visual organization (`src/modules/worktrees/lib/branch-colors.ts`):
 
 | Pattern | Color Index |
 |---------|-------------|
@@ -105,22 +172,60 @@ Branches are color-coded for visual organization (`src/lib/branch-colors.ts`):
 src-tauri/src/
 ├── main.rs              # Application entry point
 ├── lib.rs               # Library exports
-├── commands/
-│   ├── mod.rs           # Tauri command handlers
-│   ├── worktree.rs      # Git worktree operations
-│   └── tests/           # Test modules
-└── models/
-    └── mod.rs           # Data models (unused)
+├── core/                # Shared infrastructure
+│   ├── mod.rs           # Module exports
+│   ├── persistence.rs   # Store load/save utilities
+│   ├── system.rs        # System operations (clipboard, finder)
+│   └── types.rs         # Shared types (AppSettings)
+├── worktrees/           # Worktree management
+│   ├── mod.rs           # Module exports
+│   ├── types.rs         # WorktreeInfo, Repository, etc.
+│   ├── operations.rs    # Git worktree operations
+│   ├── external_apps.rs # Terminal/editor integration
+│   ├── store.rs         # Worktree state (AppState)
+│   └── commands.rs      # Tauri commands
+├── agent_manager/       # Agent manager
+│   ├── mod.rs           # Module exports
+│   ├── types.rs         # Task, TaskAgent, etc.
+│   ├── task_operations.rs # Task CRUD
+│   ├── agent_operations.rs # Agent management
+│   ├── opencode.rs      # OpenCode process manager
+│   ├── store.rs         # Task state (TaskManagerState)
+│   └── commands.rs      # Tauri commands
+└── tests/               # Centralized tests
+    ├── mod.rs           # Test module exports
+    ├── helpers.rs       # Test utilities (TestRepo)
+    ├── worktrees/       # Worktree tests
+    └── agent_manager/   # Agent manager tests
 ```
 
-### Command Layer (`commands/mod.rs`)
+### Core Module (`core/`)
 
-The command layer handles:
-1. **State Management**: `AppState` with `Mutex<StoreData>`
-2. **Persistence**: Load/save to `~/.aristar-worktrees/store.json`
-3. **Tauri Commands**: Bridge between frontend and Git operations
+Shared infrastructure used by all feature modules:
+- **persistence.rs**: Generic load/save functions for JSON stores
+- **system.rs**: System operations (clipboard, Finder reveal)
+- **types.rs**: Shared types like `AppSettings`
 
-### Worktree Operations (`commands/worktree.rs`)
+### Worktrees Module (`worktrees/`)
+
+Git worktree management:
+- **types.rs**: `WorktreeInfo`, `Repository`, `StoreData`
+- **operations.rs**: Git worktree operations via shell commands
+- **external_apps.rs**: Terminal/editor integration
+- **store.rs**: `AppState` with repository data
+- **commands.rs**: Tauri commands exposed to frontend
+
+### Agent Manager Module (`agent_manager/`)
+
+AI agent orchestration:
+- **types.rs**: `Task`, `TaskAgent`, agent state types
+- **task_operations.rs**: Task CRUD operations
+- **agent_operations.rs**: Agent lifecycle management
+- **opencode.rs**: OpenCode process manager
+- **store.rs**: `TaskManagerState` for task data
+- **commands.rs**: Tauri commands for agent management
+
+### Worktree Operations (`worktrees/operations.rs`)
 
 Core Git operations via shell commands:
 

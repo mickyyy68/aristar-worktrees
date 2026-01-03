@@ -81,5 +81,27 @@ export interface CommitInfo {
   date: number;
 }
 
-// Agent Manager types
-export * from './types/agent-manager';
+// Agent Manager types are now in @agent-manager/store/types
+// Re-export for backwards compatibility during migration
+export type {
+  TaskStatus,
+  AgentStatus,
+  TaskAgent,
+  Task,
+  OpenCodeModel,
+  OpenCodeProvider,
+  OpenCodeAgentConfig,
+  ModelSelection,
+  CreateTaskParams,
+  TextPart,
+  ToolInvocationPart,
+  ToolResultPart,
+  MessagePart,
+  MessageStatus,
+  OpenCodeSSEEvent,
+  MessagePartDeltaEvent,
+  MessageCreatedEvent,
+  MessageCompletedEvent,
+  SessionUpdatedEvent,
+  StreamingMessage,
+} from '@agent-manager/store/types';

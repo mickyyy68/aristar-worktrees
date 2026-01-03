@@ -8,6 +8,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@core': path.resolve(__dirname, './src/modules/core'),
+      '@worktrees': path.resolve(__dirname, './src/modules/worktrees'),
+      '@agent-manager': path.resolve(__dirname, './src/modules/agent-manager'),
     },
   },
   server: {

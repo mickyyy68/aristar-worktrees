@@ -12,9 +12,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { useAgentManagerStore } from '@/store/agent-manager-store';
-import { opencodeClient } from '@/lib/opencode';
-import type { OpenCodeMessage } from '@/lib/opencode';
+import { useAgentManagerStore } from '@agent-manager/store';
+import { opencodeClient, type OpenCodeMessage } from '@agent-manager/api';
 import { createMockSSEServer, type MockSSEServer } from '../mocks/mock-sse-server';
 import {
   TEST_SESSION_ID,
