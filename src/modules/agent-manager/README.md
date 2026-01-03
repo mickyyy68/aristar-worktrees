@@ -844,11 +844,22 @@ const {
 
 The chat input includes an "Optimize" button (wand icon) that uses AI to improve your prompt before sending.
 
+### Configuration
+
+Before using prompt optimization, you must configure an optimization model in Settings:
+
+1. Open **Settings** (gear icon in the sidebar)
+2. Navigate to the **Optimization** tab
+3. Select an AI model to use for optimization
+4. Save settings
+
+**Note**: The optimize button is disabled until a model is configured. Hover over the button to see a tooltip indicating this.
+
 ### How It Works
 
 1. User types a prompt in the chat input
 2. Clicks the "Optimize" button (wand icon)
-3. System sends the prompt to the "build" agent for optimization
+3. System sends the prompt to the configured optimization model
 4. Optimized prompt appears in a review dialog
 5. User can:
    - **Accept**: Replace original with optimized prompt
@@ -888,3 +899,46 @@ const optimizedPrompt = await opencodeClient.optimizePrompt(
   'anthropic/claude-sonnet-4'
 );
 ```
+
+## Resource Cleanup
+
+The module manages several resources that require cleanup on shutdown:
+
+- **SSE connections**: EventSource connections to OpenCode servers
+- **Module-level Maps**: `sseUnsubscribers` and `agentsBeingRecovered`
+- **OpenCode client connections**: Per-agent client instances
+
+### Cleanup Function
+
+The module exports a cleanup function that should be called on app shutdown:
+
+```typescript
+import { cleanupAgentManagerResources } from '@agent-manager/store';
+
+// In main.tsx or app cleanup handler
+cleanupAgentManagerResources();
+```
+
+This function:
+1. Calls all SSE unsubscribe functions
+2. Clears the `sseUnsubscribers` Map
+3. Clears the `agentsBeingRecovered` Set
+
+### App Shutdown Flow
+
+The cleanup is orchestrated in `main.tsx`:
+
+```typescript
+import { cleanupAgentManagerResources } from '@agent-manager/store/agent-manager-store';
+import { sseManager } from '@agent-manager/store/sse-manager';
+import { opencodeClientManager } from '@agent-manager/api/opencode';
+
+function cleanupResources() {
+  cleanupAgentManagerResources();  // Module-level Maps
+  sseManager.disconnectAll();      // SSE connections
+  opencodeClientManager.disconnectAll(); // Client connections
+}
+
+window.addEventListener('beforeunload', cleanupResources);
+```
+

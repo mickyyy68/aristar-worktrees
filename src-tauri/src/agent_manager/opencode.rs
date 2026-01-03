@@ -65,6 +65,9 @@ pub struct OpenCodeManager {
 
 impl OpenCodeManager {
     pub fn new() -> Self {
+        // Clean up any orphaned processes from previous crashes
+        Self::cleanup_orphaned_processes();
+
         Self {
             instances: Mutex::new(HashMap::new()),
         }
@@ -143,6 +146,13 @@ impl OpenCodeManager {
                 .process
                 .kill()
                 .map_err(|e| format!("Failed to kill OpenCode process: {}", e))?;
+
+            // Reap the zombie process to prevent resource leaks
+            match instance.process.wait() {
+                Ok(status) => println!("[opencode] Process exited with status: {}", status),
+                Err(e) => println!("[opencode] Warning: Failed to wait for process: {}", e),
+            }
+
             println!("[opencode] Server stopped successfully");
         } else {
             println!(
@@ -157,12 +167,88 @@ impl OpenCodeManager {
     /// Stop all running OpenCode servers.
     pub fn stop_all(&self) {
         if let Ok(mut instances) = self.instances.lock() {
-            for (_, mut instance) in instances.drain() {
+            for (path, mut instance) in instances.drain() {
                 println!(
                     "[opencode] Stopping server on port {} during cleanup",
                     instance.port
                 );
-                let _ = instance.process.kill();
+                if let Err(e) = instance.process.kill() {
+                    println!(
+                        "[opencode] Warning: Failed to kill process for {}: {}",
+                        path.display(),
+                        e
+                    );
+                    continue;
+                }
+
+                // Reap the zombie process to prevent resource leaks
+                match instance.process.wait() {
+                    Ok(status) => println!(
+                        "[opencode] Process for {} exited with status: {}",
+                        path.display(),
+                        status
+                    ),
+                    Err(e) => println!(
+                        "[opencode] Warning: Failed to wait for process {}: {}",
+                        path.display(),
+                        e
+                    ),
+                }
+            }
+        }
+    }
+
+    /// Clean up orphaned OpenCode processes from previous crashes.
+    /// This uses pkill to find and terminate any leftover `opencode serve` processes.
+    pub fn cleanup_orphaned_processes() -> u32 {
+        use std::process::Command;
+
+        println!("[opencode] Checking for orphaned OpenCode processes...");
+
+        // Use pgrep to find processes, then kill them
+        // This is safer than pkill as we can count them first
+        let pgrep_output = Command::new("pgrep")
+            .args(["-f", "opencode serve"])
+            .output();
+
+        match pgrep_output {
+            Ok(output) if output.status.success() => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let pids: Vec<&str> = stdout.trim().lines().collect();
+                let count = pids.len() as u32;
+
+                if count > 0 {
+                    println!(
+                        "[opencode] Found {} orphaned process(es), cleaning up...",
+                        count
+                    );
+
+                    // Kill the processes
+                    let kill_result = Command::new("pkill").args(["-f", "opencode serve"]).output();
+
+                    match kill_result {
+                        Ok(status) if status.status.success() => {
+                            println!("[opencode] Successfully cleaned up {} orphaned process(es)", count);
+                        }
+                        Ok(_) => {
+                            println!("[opencode] pkill completed (some processes may have already exited)");
+                        }
+                        Err(e) => {
+                            println!("[opencode] Warning: Failed to run pkill: {}", e);
+                        }
+                    }
+                }
+
+                count
+            }
+            Ok(_) => {
+                // pgrep found no processes (exit code 1)
+                println!("[opencode] No orphaned processes found");
+                0
+            }
+            Err(e) => {
+                println!("[opencode] Warning: Failed to check for orphaned processes: {}", e);
+                0
             }
         }
     }

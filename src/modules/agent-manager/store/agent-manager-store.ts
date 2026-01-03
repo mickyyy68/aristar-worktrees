@@ -42,6 +42,36 @@ const agentsBeingRecovered = new Set<string>();
 const sseUnsubscribers = new Map<string, () => void>();
 
 /**
+ * Clean up all module-level resources.
+ * This should be called when the app is shutting down to prevent memory leaks.
+ * 
+ * Cleanup flow:
+ * 1. Call all SSE unsubscribe functions to disconnect from servers
+ * 2. Clear both Maps to allow garbage collection
+ * 
+ * @see main.tsx for usage during app shutdown
+ */
+export function cleanupAgentManagerResources(): void {
+  console.log('[AgentManager] Cleaning up module resources...');
+  
+  // Unsubscribe all SSE connections
+  for (const [agentKey, unsub] of sseUnsubscribers.entries()) {
+    try {
+      unsub();
+      console.log(`[AgentManager] Unsubscribed SSE for ${agentKey}`);
+    } catch (e) {
+      console.error(`[AgentManager] Error unsubscribing ${agentKey}:`, e);
+    }
+  }
+  sseUnsubscribers.clear();
+  
+  // Clear recovery tracking
+  agentsBeingRecovered.clear();
+  
+  console.log('[AgentManager] Module cleanup complete');
+}
+
+/**
  * Send a message using async API (for use with SSE streaming)
  * The response will come through SSE events
  */
@@ -345,12 +375,27 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           // Stop all OpenCode servers for this task first
           await commands.stopTaskAllOpencode(taskId);
           
-          // Clean up SSE and client resources for all agents in this task
+          // Clean up all module-level resources for agents in this task
           if (task) {
             for (const agent of task.agents) {
               const agentKey = getAgentKey(taskId, agent.id);
+              
+              // Clean up SSE subscriptions from module-level Map
+              const unsub = sseUnsubscribers.get(agentKey);
+              if (unsub) {
+                unsub();
+                sseUnsubscribers.delete(agentKey);
+              }
+              
+              // Clean up recovery tracking
+              agentsBeingRecovered.delete(agentKey);
+              
+              // Clean up client manager resources
               opencodeClientManager.cleanupSSE(agentKey);
               opencodeClientManager.removeClient(agentKey);
+              
+              // Clean up message store
+              useMessageStore.getState().cleanupAgent(agentKey);
             }
           }
 
@@ -410,6 +455,9 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
             unsub();
             sseUnsubscribers.delete(agentKey);
           }
+          
+          // Clean up recovery tracking
+          agentsBeingRecovered.delete(agentKey);
           
           // Clean up the per-agent OpenCode client (legacy)
           opencodeClientManager.cleanupSSE(agentKey);
@@ -676,6 +724,9 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           unsub();
           sseUnsubscribers.delete(agentKey);
         }
+
+        // Clean up recovery tracking
+        agentsBeingRecovered.delete(agentKey);
 
         if (agent?.sessionId) {
           try {

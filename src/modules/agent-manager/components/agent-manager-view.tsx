@@ -190,9 +190,18 @@ export function AgentManagerView() {
 
   // Optimization handlers
   const handleOptimize = useCallback(async (prompt: string) => {
-    if (!currentRepo || !activeAgent) return;
+    if (!currentRepo) return;
     
-    const model = `${activeAgent.providerId}/${activeAgent.modelId}`;
+    // Use the optimization model from settings
+    const { settings } = useAppStore.getState();
+    const optimizationModel = settings.optimizationModel;
+    
+    if (!optimizationModel) {
+      // No optimization model configured - this shouldn't happen since button is disabled
+      return;
+    }
+    
+    const model = `${optimizationModel.providerId}/${optimizationModel.modelId}`;
     setOriginalPrompt(prompt);
     
     const result = await optimize(prompt, currentRepo.path, model);
@@ -200,7 +209,7 @@ export function AgentManagerView() {
       setOptimizedPrompt(result);
       setOptimizationDialogOpen(true);
     }
-  }, [currentRepo, activeAgent, optimize]);
+  }, [currentRepo, optimize]);
 
   const handleAcceptOptimized = useCallback((acceptedPrompt: string) => {
     // Replace the message in the chat input

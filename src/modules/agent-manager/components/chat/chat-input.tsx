@@ -5,6 +5,7 @@ import { Textarea } from '@core/ui/textarea';
 import { Switch } from '@core/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@core/ui/tooltip';
 import { cn } from '@core/lib/utils';
+import { useAppStore } from '@/store/use-app-store';
 import type { TaskAgent } from '../../store/types';
 
 interface ChatInputProps {
@@ -52,6 +53,10 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
   const [sendToAll, setSendToAll] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Check if optimization model is configured
+  const { settings } = useAppStore();
+  const hasOptimizationModel = settings.optimizationModel !== undefined;
+
   // Expose message getter and setter to parent
   useImperativeHandle(ref, () => ({
     getMessage: () => message,
@@ -76,9 +81,9 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
 
   const handleOptimize = useCallback(() => {
     const trimmedMessage = message.trim();
-    if (!trimmedMessage || isLoading || disabled || isOptimizing || !onOptimize) return;
+    if (!trimmedMessage || isLoading || disabled || isOptimizing || !onOptimize || !hasOptimizationModel) return;
     onOptimize(trimmedMessage);
-  }, [message, isLoading, disabled, isOptimizing, onOptimize]);
+  }, [message, isLoading, disabled, isOptimizing, onOptimize, hasOptimizationModel]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -211,10 +216,11 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                   size="icon"
                   className={cn(
                     "h-7 w-7 text-muted-foreground hover:text-foreground",
-                    isOptimizing && "animate-pulse text-primary"
+                    isOptimizing && "animate-pulse text-primary",
+                    !hasOptimizationModel && "opacity-50 cursor-not-allowed"
                   )}
                   onClick={handleOptimize}
-                  disabled={disabled || isLoading || isOptimizing || !message.trim()}
+                  disabled={disabled || isLoading || isOptimizing || !message.trim() || !hasOptimizationModel}
                 >
                   {isOptimizing ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -224,7 +230,11 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">
-                {isOptimizing ? 'Optimizing...' : 'Optimize prompt'}
+                {isOptimizing 
+                  ? 'Optimizing...' 
+                  : !hasOptimizationModel 
+                    ? 'Set a model in Settings to enable' 
+                    : 'Optimize prompt'}
               </TooltipContent>
             </Tooltip>
           )}

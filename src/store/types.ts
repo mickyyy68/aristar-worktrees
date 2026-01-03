@@ -59,6 +59,12 @@ export interface ToolDisplaySettings {
   truncatedOutputLines: number;
 }
 
+/** Model selection for optimization (provider/model-id format) */
+export interface OptimizationModelSelection {
+  providerId: string;
+  modelId: string;
+}
+
 export interface AppSettings {
   /** Selected theme name */
   themeName: string;
@@ -74,6 +80,8 @@ export interface AppSettings {
   toolDisplay: ToolDisplaySettings;
   /** Whether the sidebar is collapsed */
   sidebarCollapsed: boolean;
+  /** AI model to use for prompt optimization (provider/model-id format) */
+  optimizationModel?: OptimizationModelSelection;
 }
 
 export interface StoreData {

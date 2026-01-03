@@ -800,18 +800,32 @@ class OpenCodeClientManager {
    * Used by the useAgentSSE hook to receive events.
    * If SSE is already connected, the handler will receive future events.
    * 
+   * NOTE: If a handler already exists for this agent, it will be replaced.
+   * The old handler reference is removed from the Map to allow garbage collection.
+   * 
    * @param agentKey - Composite key in format "taskId:agentId"
    * @param handler - Function to call for each event
    * @returns Unsubscribe function
    */
   registerEventHandler(agentKey: string, handler: (event: any) => void): () => void {
+    // Check for existing handler and clean it up first
+    const existingHandler = this.eventHandlers.get(agentKey);
+    if (existingHandler) {
+      console.log(`[OpenCodeClientManager] Replacing existing event handler for ${agentKey}`);
+      // Delete the old reference so it can be garbage collected
+      this.eventHandlers.delete(agentKey);
+    }
+
     this.eventHandlers.set(agentKey, handler);
     console.log(`[OpenCodeClientManager] Event handler registered for ${agentKey}`);
     
     return () => {
+      // Only unregister if this is still the current handler
       if (this.eventHandlers.get(agentKey) === handler) {
         this.eventHandlers.delete(agentKey);
         console.log(`[OpenCodeClientManager] Event handler unregistered for ${agentKey}`);
+      } else {
+        console.log(`[OpenCodeClientManager] Event handler for ${agentKey} was already replaced, skipping unregister`);
       }
     };
   }

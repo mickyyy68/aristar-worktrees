@@ -36,7 +36,7 @@ export { sseManager } from './store/sse-manager';
 export { useAgentSSE, sendMessageAsync } from './api';
 
 // Store (has its own OpenCodeModel and OpenCodeProvider types)
-export { useAgentManagerStore, getAgentKey } from './store';
+export { useAgentManagerStore, getAgentKey, cleanupAgentManagerResources } from './store';
 export type {
   Task,
   TaskAgent,

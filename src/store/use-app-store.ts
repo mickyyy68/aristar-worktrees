@@ -55,6 +55,7 @@ const defaultSettings: AppSettings = {
     truncatedOutputLines: 10,
   },
   sidebarCollapsed: false,
+  optimizationModel: undefined,
 };
 
 export const useAppStore = create<AppState>()(

@@ -294,3 +294,10 @@ pub fn is_opencode_running(state: State<OpenCodeManager>, worktree_path: String)
     let path = PathBuf::from(worktree_path);
     state.is_running(&path)
 }
+
+/// Clean up orphaned OpenCode processes from previous crashes.
+/// Returns the number of processes that were cleaned up.
+#[tauri::command]
+pub fn cleanup_orphaned_opencode_processes() -> u32 {
+    OpenCodeManager::cleanup_orphaned_processes()
+}

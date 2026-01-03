@@ -136,13 +136,34 @@ pub struct OpenCodeManager {
 }
 
 impl OpenCodeManager {
-    pub fn new() -> Self
+    pub fn new() -> Self                                          // Load from disk + cleanup orphans
     pub fn start(&self, worktree_path: PathBuf) -> Result<u16, String>
     pub fn stop(&self, worktree_path: &PathBuf) -> Result<(), String>
-    pub fn stop_all(&self)  // Called on app exit
+    pub fn stop_all(&self)                                        // Called on app exit
     pub fn get_port(&self, worktree_path: &PathBuf) -> Result<Option<u16>, String>
     pub fn is_running(&self, worktree_path: &PathBuf) -> bool
+    pub fn cleanup_orphaned_processes() -> u32                    // Kill orphaned processes
 }
+```
+
+### Process Cleanup
+
+The OpenCodeManager handles proper process cleanup to prevent zombie processes:
+
+1. **On `stop()`**: After killing the process, `wait()` is called to reap the zombie
+2. **On `stop_all()`**: Same cleanup for each instance during app shutdown
+3. **On startup (`new()`)**: Orphaned processes from previous crashes are cleaned up
+
+**Orphaned Process Cleanup:**
+
+When the app crashes or is force-quit, OpenCode processes may be left running. The manager uses `pgrep` and `pkill` to find and clean these up:
+
+```rust
+// Called automatically on startup
+OpenCodeManager::cleanup_orphaned_processes();
+
+// Can also be invoked from frontend
+invoke('cleanup_orphaned_opencode_processes');
 ```
 
 **Server Details:**
@@ -213,6 +234,7 @@ tauri::Builder::default()
 | `stop_agent_opencode` | `task_id, agent_id` | `()` | Stop server |
 | `get_agent_opencode_port` | `task_id, agent_id` | `Option<u16>` | Get port if running |
 | `stop_task_all_opencode` | `task_id` | `()` | Stop all agents' servers |
+| `cleanup_orphaned_opencode_processes` | - | `u32` | Kill orphaned processes |
 
 ### Worktree OpenCode Commands
 

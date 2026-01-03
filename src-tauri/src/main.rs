@@ -75,6 +75,8 @@ fn main() {
             // Worktree validation commands
             agent_manager::commands::validate_task_worktrees,
             agent_manager::commands::recreate_agent_worktree,
+            // Process cleanup commands
+            agent_manager::commands::cleanup_orphaned_opencode_processes,
             // Logger commands
             core::commands::get_log_file_path,
             core::commands::append_to_log_file,
