@@ -17,7 +17,7 @@ export function ToolsSection({ toolCalls }: ToolsSectionProps) {
   const { toolDisplay } = settings;
 
   const [isSectionExpanded, setIsSectionExpanded] = useState(true);
-  const [allToolsExpanded, setAllToolsExpanded] = useState(toolDisplay.expandToolsByDefault);
+  const [allToolsExpanded, setAllToolsExpanded] = useState(toolDisplay?.expandToolsByDefault ?? false);
 
   // Calculate completion status
   const stats = useMemo(() => {

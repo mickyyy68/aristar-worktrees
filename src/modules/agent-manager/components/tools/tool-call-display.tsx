@@ -109,10 +109,10 @@ export function ToolCallDisplay({ toolCall, defaultExpanded }: ToolCallDisplayPr
   const { toolDisplay } = settings;
 
   const [isExpanded, setIsExpanded] = useState(
-    defaultExpanded ?? toolDisplay.expandToolsByDefault
+    defaultExpanded ?? toolDisplay?.expandToolsByDefault ?? false
   );
   const [isOutputExpanded, setIsOutputExpanded] = useState(
-    toolDisplay.outputVisibility === 'always'
+    toolDisplay?.outputVisibility === 'always'
   );
 
   const toolConfig = useMemo(() => getToolConfig(toolCall.toolName), [toolCall.toolName]);
@@ -124,7 +124,7 @@ export function ToolCallDisplay({ toolCall, defaultExpanded }: ToolCallDisplayPr
 
   const hasResult = toolCall.result !== undefined && toolCall.result !== null;
   const resultString = hasResult ? formatResult(toolCall.result) : null;
-  const truncatedResult = resultString ? truncateOutput(resultString, toolDisplay.truncatedOutputLines) : null;
+  const truncatedResult = resultString ? truncateOutput(resultString, toolDisplay?.truncatedOutputLines ?? 10) : null;
   const isResultTruncated = resultString && truncatedResult && resultString !== truncatedResult;
 
   const Icon = toolConfig.icon;
@@ -145,8 +145,8 @@ export function ToolCallDisplay({ toolCall, defaultExpanded }: ToolCallDisplayPr
   };
 
   const displayText = description || toolLabel;
-  const showCommand = toolDisplay.showToolCommands && command;
-  const canExpand = hasResult || (command && !toolDisplay.showToolCommands);
+  const showCommand = toolDisplay?.showToolCommands && command;
+  const canExpand = hasResult || (command && !toolDisplay?.showToolCommands);
 
   return (
     <div className="group rounded-md border bg-muted/20 transition-colors hover:bg-muted/30">
@@ -193,7 +193,7 @@ export function ToolCallDisplay({ toolCall, defaultExpanded }: ToolCallDisplayPr
       {isExpanded && (
         <div className="border-t px-3 py-2 space-y-2">
           {/* Show command if not already shown above */}
-          {command && !toolDisplay.showToolCommands && (
+          {command && !toolDisplay?.showToolCommands && (
             <div>
               <div className="mb-1 text-xs font-medium text-muted-foreground">
                 {toolCall.toolName === 'bash' ? 'Command' : 'Input'}
@@ -209,7 +209,7 @@ export function ToolCallDisplay({ toolCall, defaultExpanded }: ToolCallDisplayPr
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground">Output</span>
-                {toolDisplay.outputVisibility === 'hidden' && (
+                {toolDisplay?.outputVisibility === 'hidden' && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -222,14 +222,14 @@ export function ToolCallDisplay({ toolCall, defaultExpanded }: ToolCallDisplayPr
                 )}
               </div>
 
-              {(toolDisplay.outputVisibility !== 'hidden' || isOutputExpanded) && (
+              {(toolDisplay?.outputVisibility !== 'hidden' || isOutputExpanded) && (
                 <div className="relative">
                   <pre className="overflow-x-auto rounded bg-muted p-2 text-xs font-mono max-h-80 overflow-y-auto">
-                    {toolDisplay.outputVisibility === 'truncated' && !isOutputExpanded
+                    {toolDisplay?.outputVisibility === 'truncated' && !isOutputExpanded
                       ? truncatedResult
                       : resultString}
                   </pre>
-                  {toolDisplay.outputVisibility === 'truncated' && isResultTruncated && (
+                  {toolDisplay?.outputVisibility === 'truncated' && isResultTruncated && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
