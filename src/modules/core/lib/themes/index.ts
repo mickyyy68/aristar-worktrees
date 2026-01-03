@@ -15,6 +15,7 @@ import { aristarTheme } from './aristar';
 import { claudeTheme } from './claude';
 import { vercelTheme } from './vercel';
 import { natureTheme } from './nature';
+import { t3ChatTheme } from './t3-chat';
 
 /** All available themes */
 export const THEMES: ThemeDefinition[] = [
@@ -22,6 +23,7 @@ export const THEMES: ThemeDefinition[] = [
   claudeTheme,
   vercelTheme,
   natureTheme,
+  t3ChatTheme,
 ];
 
 /** Available theme names */
