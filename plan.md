@@ -1,6 +1,10 @@
-# Module Reorganization Plan
+# Frontend Module Reorganization Plan
 
-> **TL;DR**: Reorganize the codebase into a modular structure with three main modules: `core` (shared utilities), `worktrees` (git worktree management), and `agent-manager` (AI agent orchestration). Each module has its own README.md files, `index.ts` for public exports, and feature-specific path aliases.
+> **TL;DR**: Reorganize the frontend codebase (`src/`) into a modular structure with three main modules: `core` (shared utilities), `worktrees` (git worktree management), and `agent-manager` (AI agent orchestration). Each module has its own README.md files, `index.ts` for public exports, and feature-specific path aliases.
+
+## Related Plans
+
+- **[plan-2.md](./plan-2.md)** - Rust Backend Module Reorganization (can run in parallel)
 
 ## Target Structure
 
@@ -389,3 +393,9 @@ src/
 - **Phase 9**: ~30 minutes (final review)
 
 **Total**: ~7-10 hours
+
+---
+
+## Related Work
+
+After completing this frontend reorganization, proceed to **[plan-2.md](./plan-2.md)** for the Rust backend reorganization. Both plans can be executed in parallel by different engineers, but should be coordinated to ensure the app remains functional throughout the process.
