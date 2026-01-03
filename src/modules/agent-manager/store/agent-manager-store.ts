@@ -8,6 +8,7 @@ import type {
   CreateTaskParams,
   ModelSelection,
   AgentStatus,
+  TaskPreferencesRecord,
 } from './types';
 import type { OpenCodeMessage, OpenCodeMessageExtended } from '../api/opencode';
 import { opencodeClient, opencodeClientManager } from '../api/opencode';
@@ -96,6 +97,9 @@ interface AgentManagerState {
   providers: OpenCodeProvider[];
   availableAgents: OpenCodeAgentConfig[];
 
+  // Task creation preferences, keyed by repository ID
+  taskPreferences: TaskPreferencesRecord;
+
   // UI State
   isLoading: boolean;
   isLoadingOpenCodeData: boolean;
@@ -168,6 +172,11 @@ interface AgentManagerActions {
   // Agent/Task status updates
   markAgentIdle: (taskId: string, agentId: string) => Promise<void>;
   updateTaskStatusFromAgents: (taskId: string) => Promise<void>;
+
+  // Task creation preferences
+  saveTaskPreferences: (repoId: string, agentType: string, models: ModelSelection[], prompt: string) => void;
+  clearTaskPreferences: (repoId: string) => void;
+  clearAllTaskPreferences: () => void;
 }
 
 type AgentManagerStore = AgentManagerState & AgentManagerActions;
@@ -183,6 +192,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
       activeAgentId: null,
       providers: [],
       availableAgents: [],
+      taskPreferences: {},
       isLoading: false,
       isLoadingOpenCodeData: false,
       error: null,
@@ -1290,6 +1300,28 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
         const { orphanedAgents } = get();
         return orphanedAgents[taskId]?.includes(agentId) || false;
       },
+
+      // ============ Task Creation Preferences ============
+
+      saveTaskPreferences: (repoId, agentType, models, prompt) => {
+        set((state) => ({
+          taskPreferences: {
+            ...state.taskPreferences,
+            [repoId]: { agentType, models, prompt },
+          },
+        }));
+      },
+
+      clearTaskPreferences: (repoId) => {
+        set((state) => {
+          const { [repoId]: _removed, ...remaining } = state.taskPreferences;
+          return { taskPreferences: remaining };
+        });
+      },
+
+      clearAllTaskPreferences: () => {
+        set({ taskPreferences: {} });
+      },
     }),
     {
       name: 'aristar-agent-manager-store',
@@ -1299,6 +1331,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
         activeAgentId: state.activeAgentId,
         providers: state.providers,
         availableAgents: state.availableAgents,
+        taskPreferences: state.taskPreferences,
       }),
     }
   )

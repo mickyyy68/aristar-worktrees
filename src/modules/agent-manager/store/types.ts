@@ -216,3 +216,19 @@ export interface StreamingMessage {
   parts: MessagePart[];
   isStreaming: boolean;
 }
+
+// ============ Task Creation Preferences ============
+
+/**
+ * Per-repository task creation preferences
+ */
+export interface TaskCreationPreferences {
+  agentType: string;
+  models: ModelSelection[];
+  prompt: string;
+}
+
+/**
+ * All task creation preferences, keyed by repository ID
+ */
+export type TaskPreferencesRecord = Record<string, TaskCreationPreferences>;

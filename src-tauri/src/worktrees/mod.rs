@@ -14,3 +14,6 @@ pub mod types;
 
 // Re-export store init function (AppState is used via store:: prefix)
 pub use store::init_store;
+
+// Re-export persistence utilities
+pub use crate::core::get_aristar_worktrees_base;

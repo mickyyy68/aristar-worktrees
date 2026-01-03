@@ -10,10 +10,20 @@ mod worktrees;
 #[cfg(test)]
 mod tests;
 
+use std::fs;
 use tauri::Manager;
 
 fn main() {
     println!("[main] Starting Aristar Worktrees...");
+
+    let worktrees_base = worktrees::get_aristar_worktrees_base();
+    if !worktrees_base.exists() {
+        println!("[main] Creating worktrees directory: {:?}", worktrees_base);
+        if let Err(e) = fs::create_dir_all(&worktrees_base) {
+            eprintln!("[main] ERROR: Failed to create worktrees directory: {}", e);
+            eprintln!("[main] This may cause issues when saving repository data.");
+        }
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

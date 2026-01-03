@@ -24,9 +24,18 @@ pub fn get_repositories(state: State<AppState>) -> Result<Vec<Repository>, Strin
 #[tauri::command]
 pub fn add_repository(state: State<AppState>, path: String) -> Result<Repository, String> {
     println!("[add_repository] Called with path: {}", path);
-    let abs_path = Path::new(&path)
+
+    let path_obj = Path::new(&path);
+    if !path_obj.exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+    if !path_obj.is_dir() {
+        return Err(format!("Path is not a directory: {}", path));
+    }
+
+    let abs_path = path_obj
         .canonicalize()
-        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("Failed to resolve path '{}': {}", path, e))?
         .to_string_lossy()
         .to_string();
 

@@ -529,6 +529,42 @@ class OpenCodeClient {
   }
 
   /**
+   * Optimize a prompt using the "build" agent.
+   * Creates a temporary session, sends the optimization request, and returns the result.
+   *
+   * @param prompt - The original prompt to optimize
+   * @param model - The model to use in format "provider/model-id"
+   * @returns The optimized prompt text
+   */
+  async optimizePrompt(prompt: string, model: string): Promise<string> {
+    // Create a new session for the optimization
+    const session = await this.createSession('Prompt Optimization');
+    this.setSession(session.id);
+
+    const optimizationRequest = `You are an expert prompt engineer. Optimize the following user prompt for an AI coding assistant.
+
+## Original Prompt
+${prompt}
+
+## Output Requirements
+- Be specific and actionable
+- Include context about the task/goal
+- Add constraints (style, tests, dependencies) if relevant
+- Structure clearly with sections if helpful
+- Keep it concise but complete
+
+Return ONLY the optimized prompt, no explanations or markdown code blocks.`;
+
+    // Send the prompt and wait for the response
+    const response = await this.sendPromptWithOptions(optimizationRequest, {
+      model,
+      agent: 'build',
+    });
+
+    return response.content.trim();
+  }
+
+  /**
    * Abort/cancel a running session
    * Endpoint: POST /session/:id/abort
    */

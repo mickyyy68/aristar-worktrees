@@ -1,16 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { GitBranch, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@core/ui/button';
 import { TaskListSidebar } from './task-list-sidebar';
 import { TaskEmptyState } from './task-empty-state';
 import { AgentTabs } from './agent-tabs';
 import { ChatView } from './chat/chat-view';
-import { ChatInput } from './chat/chat-input';
+import { ChatInput, type ChatInputRef } from './chat/chat-input';
 import { CreateTaskDialog } from './create-task-dialog';
+import { OptimizationReviewDialog } from './optimization-review-dialog';
 import { StatusBadge } from './status-badge';
 import { useAgentManagerStore, getAgentKey } from '../store/agent-manager-store';
 import { useAppStore } from '@/store/use-app-store';
 import { useAgentMessages } from '../hooks/use-agent-messages';
+import { usePromptOptimizer } from '../hooks/use-prompt-optimizer';
 import type { Task } from '../store/types';
 import { logger } from '@core/lib';
 
@@ -33,12 +35,24 @@ export function AgentManagerView() {
     isLoading: isLoadingTasks,
   } = useAgentManagerStore();
 
-  const { openInTerminal, openInEditor, revealInFinder } = useAppStore();
+  const { openInTerminal, openInEditor, revealInFinder, selectedRepositoryId, repositories } = useAppStore();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteConfirmTask, setDeleteConfirmTask] = useState<Task | null>(null);
   const [stopAgentConfirm, setStopAgentConfirm] = useState(false);
   const [removeAgentConfirm, setRemoveAgentConfirm] = useState(false);
+
+  // Optimization state
+  const [optimizationDialogOpen, setOptimizationDialogOpen] = useState(false);
+  const [originalPrompt, setOriginalPrompt] = useState('');
+  const [optimizedPrompt, setOptimizedPrompt] = useState('');
+  const chatInputRef = useRef<ChatInputRef>(null);
+
+  // Prompt optimizer hook
+  const { optimize, isOptimizing } = usePromptOptimizer();
+
+  // Get the current repository
+  const currentRepo = repositories.find((r) => r.id === selectedRepositoryId);
 
   // Load tasks on mount
   useEffect(() => {
@@ -174,6 +188,34 @@ export function AgentManagerView() {
     setDeleteConfirmTask(null);
   }, [deleteConfirmTask, deleteTask]);
 
+  // Optimization handlers
+  const handleOptimize = useCallback(async (prompt: string) => {
+    if (!currentRepo || !activeAgent) return;
+    
+    const model = `${activeAgent.providerId}/${activeAgent.modelId}`;
+    setOriginalPrompt(prompt);
+    
+    const result = await optimize(prompt, currentRepo.path, model);
+    if (result) {
+      setOptimizedPrompt(result);
+      setOptimizationDialogOpen(true);
+    }
+  }, [currentRepo, activeAgent, optimize]);
+
+  const handleAcceptOptimized = useCallback((acceptedPrompt: string) => {
+    // Replace the message in the chat input
+    chatInputRef.current?.setMessage(acceptedPrompt);
+    setOptimizationDialogOpen(false);
+    setOriginalPrompt('');
+    setOptimizedPrompt('');
+  }, []);
+
+  const handleCancelOptimization = useCallback(() => {
+    setOptimizationDialogOpen(false);
+    setOriginalPrompt('');
+    setOptimizedPrompt('');
+  }, []);
+
   // Note: messages and isLoading come from useAgentMessages hook
 
   return (
@@ -245,6 +287,7 @@ export function AgentManagerView() {
 
               {/* Chat Input with agent actions */}
               <ChatInput
+                ref={chatInputRef}
                 onSend={handleSendMessage}
                 isLoading={isLoading}
                 disabled={!activeAgent}
@@ -261,6 +304,8 @@ export function AgentManagerView() {
                 onOpenEditor={handleOpenEditor}
                 onRevealInFinder={handleRevealInFinder}
                 onRemove={handleRemoveAgent}
+                onOptimize={activeAgent && currentRepo ? handleOptimize : undefined}
+                isOptimizing={isOptimizing}
               />
             </div>
           </div>
@@ -273,6 +318,16 @@ export function AgentManagerView() {
       <CreateTaskDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
+      />
+
+      {/* Optimization Review Dialog */}
+      <OptimizationReviewDialog
+        open={optimizationDialogOpen}
+        onOpenChange={setOptimizationDialogOpen}
+        originalPrompt={originalPrompt}
+        optimizedPrompt={optimizedPrompt}
+        onAccept={handleAcceptOptimized}
+        onCancel={handleCancelOptimization}
       />
 
       {/* Delete Task Confirmation */}

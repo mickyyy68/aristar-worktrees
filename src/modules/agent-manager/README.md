@@ -59,34 +59,36 @@ agent-manager/
 │   ├── use-agent-sse.ts   # SSE hook (legacy, being deprecated)
 │   └── index.ts
 ├── store/
-│   ├── types.ts           # Type definitions
-│   ├── agent-manager-store.ts # Zustand store for tasks/agents
+│   ├── types.ts           # Type definitions (includes TaskCreationPreferences)
+│   ├── agent-manager-store.ts # Zustand store for tasks/agents/preferences
 │   ├── message-store.ts   # Zustand store for messages
 │   └── index.ts
 ├── hooks/
-│   ├── use-agent-messages.ts  # Read-only hook for agent messages
+│   ├── use-agent-messages.ts    # Read-only hook for agent messages
+│   ├── use-prompt-optimizer.ts  # Hook for AI-powered prompt optimization
 │   └── index.ts
 ├── components/
 │   ├── chat/
 │   │   ├── chat-view.tsx      # Main chat container
 │   │   ├── chat-message.tsx   # Individual message display
-│   │   ├── chat-input.tsx     # Message input field
+│   │   ├── chat-input.tsx     # Message input field (with optimize button)
 │   │   └── index.ts
 │   ├── tools/
 │   │   ├── tool-call-display.tsx # Tool invocation display
 │   │   ├── tools-section.tsx     # Tool grouping wrapper
 │   │   ├── tool-config.ts        # Tool icons/colors config
 │   │   └── index.ts
-│   ├── agent-manager-view.tsx  # Task/agent view
-│   ├── task-list-sidebar.tsx   # Task list
-│   ├── create-task-dialog.tsx  # New task dialog
-│   ├── agent-tabs.tsx          # Agent tab switcher
-│   ├── agent-actions.tsx       # Agent action buttons
-│   ├── model-selector.tsx      # Model dropdown
-│   ├── agent-type-selector.tsx # Agent type dropdown
-│   ├── source-selector.tsx     # Branch/commit selector
-│   ├── status-badge.tsx        # Status indicator
-│   ├── task-empty-state.tsx    # Empty state placeholder
+│   ├── agent-manager-view.tsx      # Task/agent view
+│   ├── task-list-sidebar.tsx       # Task list
+│   ├── create-task-dialog.tsx      # New task dialog (with preferences)
+│   ├── optimization-review-dialog.tsx # Dialog for reviewing optimized prompts
+│   ├── agent-tabs.tsx              # Agent tab switcher
+│   ├── agent-actions.tsx           # Agent action buttons
+│   ├── model-selector.tsx          # Model dropdown
+│   ├── agent-type-selector.tsx     # Agent type dropdown
+│   ├── source-selector.tsx         # Branch/commit selector
+│   ├── status-badge.tsx            # Status indicator
+│   ├── task-empty-state.tsx        # Empty state placeholder
 │   └── index.ts
 ├── index.ts                    # Public exports
 └── README.md                   # This file
@@ -776,4 +778,113 @@ const { isLoading } = useAgentMessages(agentKey);
 if (isLoading) {
   return <LoadingIndicator />;
 }
+```
+
+## Per-Repository Task Preferences
+
+The agent manager persists task creation preferences per repository. When you create a task with specific settings (agent type, models, prompt), those settings are saved and automatically restored the next time you create a task for the same repository.
+
+### Types
+
+```typescript
+interface TaskCreationPreferences {
+  agentType: string;
+  models: ModelSelection[];
+  prompt: string;
+}
+
+type TaskPreferencesRecord = Record<string, TaskCreationPreferences>;
+```
+
+### Store Actions
+
+```typescript
+const {
+  taskPreferences,      // Record<repoId, TaskCreationPreferences>
+  saveTaskPreferences,  // (repoId, agentType, models, prompt) => void
+  clearTaskPreferences, // (repoId) => void
+  clearAllTaskPreferences, // () => void
+} = useAgentManagerStore();
+```
+
+### Behavior
+
+| Scenario | Behavior |
+|----------|----------|
+| First open for repo | Uses defaults (agent='build', empty models/prompt) |
+| Create task in repo | Saves preferences keyed by repositoryId |
+| Next open for same repo | Loads saved preferences for that repository |
+| Different repository | Shows its own saved preferences (or defaults if none) |
+| Clear preferences | Resets to defaults for that repository only |
+| App restart | All preferences persist via zustand/persist |
+
+### Data Shape in localStorage
+
+```json
+{
+  "aristar-agent-manager-store": {
+    "tasks": [...],
+    "taskPreferences": {
+      "repo-id-1": {
+        "agentType": "build",
+        "models": [{"providerId": "anthropic", "modelId": "claude-sonnet-4"}],
+        "prompt": "Fix the bug in authentication"
+      },
+      "repo-id-2": {
+        "agentType": "general",
+        "models": [...],
+        "prompt": "..."
+      }
+    }
+  }
+}
+```
+
+## Prompt Optimization
+
+The chat input includes an "Optimize" button (wand icon) that uses AI to improve your prompt before sending.
+
+### How It Works
+
+1. User types a prompt in the chat input
+2. Clicks the "Optimize" button (wand icon)
+3. System sends the prompt to the "build" agent for optimization
+4. Optimized prompt appears in a review dialog
+5. User can:
+   - **Accept**: Replace original with optimized prompt
+   - **Edit**: Manually tweak the optimized version
+   - **Cancel**: Keep the original prompt
+
+### Using the Hook
+
+```typescript
+import { usePromptOptimizer } from '@agent-manager/hooks';
+
+function MyComponent() {
+  const { optimize, isOptimizing, error, clearError } = usePromptOptimizer();
+
+  const handleOptimize = async (prompt: string, repoPath: string, model: string) => {
+    const result = await optimize(prompt, repoPath, model);
+    if (result) {
+      // Show result for review
+      console.log('Optimized:', result);
+    }
+  };
+
+  return (
+    <button onClick={() => handleOptimize('fix bugs', '/path/to/repo', 'anthropic/claude-sonnet-4')}>
+      {isOptimizing ? 'Optimizing...' : 'Optimize'}
+    </button>
+  );
+}
+```
+
+### API Method
+
+```typescript
+// Direct API call (used by the hook internally)
+const optimizedPrompt = await opencodeClient.optimizePrompt(
+  'fix bugs in the auth module',
+  'anthropic/claude-sonnet-4'
+);
 ```

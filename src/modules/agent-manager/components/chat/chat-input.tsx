@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Users, Star, StopCircle, Terminal, Code, FolderOpen, Trash2, Sparkles } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
+import { Send, Users, Star, StopCircle, Terminal, Code, FolderOpen, Trash2, Sparkles, Loader2, Wand2 } from 'lucide-react';
 import { Button } from '@core/ui/button';
 import { Textarea } from '@core/ui/textarea';
 import { Switch } from '@core/ui/switch';
@@ -20,25 +20,43 @@ interface ChatInputProps {
   onOpenEditor?: () => void;
   onRevealInFinder?: () => void;
   onRemove?: () => void;
+  onOptimize?: (prompt: string) => void;
+  isOptimizing?: boolean;
 }
 
-export function ChatInput({
-  onSend,
-  isLoading = false,
-  disabled = false,
-  placeholder = 'Type a message...',
-  agentCount = 1,
-  agent,
-  onAccept,
-  onStop,
-  onOpenTerminal,
-  onOpenEditor,
-  onRevealInFinder,
-  onRemove,
-}: ChatInputProps) {
+export interface ChatInputRef {
+  getMessage: () => string;
+  setMessage: (message: string) => void;
+}
+
+export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput(
+  {
+    onSend,
+    isLoading = false,
+    disabled = false,
+    placeholder = 'Type a message...',
+    agentCount = 1,
+    agent,
+    onAccept,
+    onStop,
+    onOpenTerminal,
+    onOpenEditor,
+    onRevealInFinder,
+    onRemove,
+    onOptimize,
+    isOptimizing = false,
+  },
+  ref
+) {
   const [message, setMessage] = useState('');
   const [sendToAll, setSendToAll] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Expose message getter and setter to parent
+  useImperativeHandle(ref, () => ({
+    getMessage: () => message,
+    setMessage: (newMessage: string) => setMessage(newMessage),
+  }), [message]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -55,6 +73,12 @@ export function ChatInput({
     onSend(trimmedMessage, sendToAll);
     setMessage('');
   }, [message, isLoading, disabled, onSend, sendToAll]);
+
+  const handleOptimize = useCallback(() => {
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage || isLoading || disabled || isOptimizing || !onOptimize) return;
+    onOptimize(trimmedMessage);
+  }, [message, isLoading, disabled, isOptimizing, onOptimize]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -179,9 +203,35 @@ export function ChatInput({
 
           <div className="w-px h-5 bg-border/60 mx-1" />
 
+          {onOptimize && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-7 w-7 text-muted-foreground hover:text-foreground",
+                    isOptimizing && "animate-pulse text-primary"
+                  )}
+                  onClick={handleOptimize}
+                  disabled={disabled || isLoading || isOptimizing || !message.trim()}
+                >
+                  {isOptimizing ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {isOptimizing ? 'Optimizing...' : 'Optimize prompt'}
+              </TooltipContent>
+            </Tooltip>
+          )}
+
           <Button
             onClick={handleSend}
-            disabled={disabled || isLoading || !message.trim()}
+            disabled={disabled || isLoading || isOptimizing || !message.trim()}
             size="sm"
             className={cn(
               "h-8 px-3 gap-1.5 transition-all duration-200",
@@ -195,4 +245,4 @@ export function ChatInput({
       </div>
     </div>
   );
-}
+});

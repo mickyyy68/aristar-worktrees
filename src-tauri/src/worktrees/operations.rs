@@ -157,7 +157,20 @@ pub fn list_worktrees(repo_path: &str) -> Result<Vec<WorktreeInfo>, String> {
     for line in output_str.lines() {
         if line.is_empty() {
             if let Some(worktree_path) = current_path.take() {
-                let path = Path::new(&worktree_path)
+                let worktree_path_obj = Path::new(&worktree_path);
+
+                // Skip worktrees that no longer exist on disk (stale/prunable)
+                if !worktree_path_obj.exists() {
+                    // Clear state for this worktree entry
+                    current_commit.take();
+                    worktree_branch.take();
+                    lock_reason.take();
+                    is_locked = false;
+                    is_bare = false;
+                    continue;
+                }
+
+                let path = worktree_path_obj
                     .canonicalize()
                     .map_err(|e| e.to_string())?
                     .to_string_lossy()
@@ -219,42 +232,47 @@ pub fn list_worktrees(repo_path: &str) -> Result<Vec<WorktreeInfo>, String> {
 
     // Handle the last worktree if output doesn't end with blank line
     if let Some(worktree_path) = current_path.take() {
-        let path = Path::new(&worktree_path)
-            .canonicalize()
-            .map_err(|e| e.to_string())?
-            .to_string_lossy()
-            .to_string();
+        let worktree_path_obj = Path::new(&worktree_path);
 
-        let is_main = path == main_path;
+        // Skip worktrees that no longer exist on disk (stale/prunable)
+        if worktree_path_obj.exists() {
+            let path = worktree_path_obj
+                .canonicalize()
+                .map_err(|e| e.to_string())?
+                .to_string_lossy()
+                .to_string();
 
-        let name = if is_main {
-            "main".to_string()
-        } else {
-            Path::new(&worktree_path)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| "worktree".to_string())
-        };
+            let is_main = path == main_path;
 
-        let branch = worktree_branch
-            .take()
-            .map(|b| b.strip_prefix("refs/heads/").unwrap_or(&b).to_string());
+            let name = if is_main {
+                "main".to_string()
+            } else {
+                Path::new(&worktree_path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "worktree".to_string())
+            };
 
-        if !is_bare {
-            worktrees.push(WorktreeInfo {
-                id: Uuid::new_v4().to_string(),
-                name,
-                path,
-                branch,
-                commit: current_commit.take(),
-                is_main,
-                is_locked,
-                lock_reason: lock_reason.take(),
-                startup_script: None,
-                script_executed: false,
-                created_at: 0,
-            });
+            let branch = worktree_branch
+                .take()
+                .map(|b| b.strip_prefix("refs/heads/").unwrap_or(&b).to_string());
+
+            if !is_bare {
+                worktrees.push(WorktreeInfo {
+                    id: Uuid::new_v4().to_string(),
+                    name,
+                    path,
+                    branch,
+                    commit: current_commit.take(),
+                    is_main,
+                    is_locked,
+                    lock_reason: lock_reason.take(),
+                    startup_script: None,
+                    script_executed: false,
+                    created_at: 0,
+                });
+            }
         }
     }
 

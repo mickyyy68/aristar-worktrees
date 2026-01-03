@@ -7,3 +7,6 @@
 
 export { useAgentMessages, useAgentMessagesById } from './use-agent-messages';
 export type { UseAgentMessagesResult } from './use-agent-messages';
+
+export { usePromptOptimizer } from './use-prompt-optimizer';
+export type { UsePromptOptimizerResult } from './use-prompt-optimizer';

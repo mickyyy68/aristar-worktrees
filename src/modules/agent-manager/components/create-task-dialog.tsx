@@ -42,6 +42,9 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     availableAgents,
     loadProviders,
     loadAvailableAgents,
+    taskPreferences,
+    saveTaskPreferences,
+    clearTaskPreferences,
   } = useAgentManagerStore();
 
   const [name, setName] = useState('');
@@ -87,19 +90,22 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     }
   }, [open, selectedRepo, loadOpenCodeData]);
 
-  // Reset form when dialog opens
+  // Reset form when dialog opens and load saved preferences
   useEffect(() => {
     if (open) {
       setName('');
-      setPrompt('');
       setSourceType('current-branch');
       setSelectedBranch('');
       setSelectedCommit(null);
-      setSelectedModels([]);
-      setAgentType('build');
       setError(null);
+      
+      // Load saved preferences for this repository
+      const prefs = selectedRepositoryId ? taskPreferences[selectedRepositoryId] : null;
+      setAgentType(prefs?.agentType || 'build');
+      setSelectedModels(prefs?.models || []);
+      setPrompt(prefs?.prompt || '');
     }
-  }, [open]);
+  }, [open, selectedRepositoryId, taskPreferences]);
 
   const handleNameChange = (value: string) => {
     const sanitized = value.replace(/[^a-zA-Z0-9_-\s]/g, '-');
@@ -128,6 +134,11 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     setError(null);
 
     try {
+      // Save preferences for this repository
+      if (selectedRepositoryId) {
+        saveTaskPreferences(selectedRepositoryId, agentType, selectedModels, prompt);
+      }
+
       let sourceBranch: string | undefined;
       let sourceCommit: string | undefined;
 
@@ -154,6 +165,16 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
       setError(String(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClearPreferences = () => {
+    if (selectedRepositoryId) {
+      clearTaskPreferences(selectedRepositoryId);
+      // Reset form fields to defaults
+      setAgentType('build');
+      setSelectedModels([]);
+      setPrompt('');
     }
   };
 
@@ -260,16 +281,32 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
         </div>
 
         <DialogFooter className="border-t px-6 py-4">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={loading || !name.trim() || selectedModels.length === 0 || !prompt.trim()}
-          >
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create
-          </Button>
+          <div className="flex w-full items-center justify-between">
+            {selectedRepositoryId && taskPreferences[selectedRepositoryId] ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={handleClearPreferences}
+              >
+                Clear saved preferences
+              </Button>
+            ) : (
+              <div />
+            )}
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={loading || !name.trim() || selectedModels.length === 0 || !prompt.trim()}
+              >
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Create
+              </Button>
+            </div>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
