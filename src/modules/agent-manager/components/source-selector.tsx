@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@core/ui/select';
 import { commands } from '@core/lib';
+import { cn } from '@core/lib/utils';
 import type { BranchInfo, CommitInfo, SourceType } from '@/store/types';
 
 interface SourceSelectorProps {
@@ -21,6 +22,8 @@ interface SourceSelectorProps {
   onBranchChange: (branch: string) => void;
   selectedCommit: CommitInfo | null;
   onCommitChange: (commit: CommitInfo | null) => void;
+  /** Compact mode with smaller labels */
+  compact?: boolean;
 }
 
 export function SourceSelector({
@@ -31,6 +34,7 @@ export function SourceSelector({
   onBranchChange,
   selectedCommit,
   onCommitChange,
+  compact = false,
 }: SourceSelectorProps) {
   const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [commits, setCommits] = useState<CommitInfo[]>([]);
@@ -93,16 +97,18 @@ export function SourceSelector({
   }, [commits, commitSearch]);
 
   const localBranches = branches.filter((b) => !b.isRemote);
+  const labelClass = compact ? 'text-xs text-muted-foreground' : '';
+  const inputHeight = compact ? 'h-9' : '';
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label>Source</Label>
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label className={labelClass}>Source</Label>
         <Select
           value={sourceType}
           onValueChange={(v) => onSourceTypeChange(v as SourceType)}
         >
-          <SelectTrigger>
+          <SelectTrigger className={inputHeight}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -114,28 +120,29 @@ export function SourceSelector({
       </div>
 
       {sourceType === 'existing-branch' && (
-        <div className="space-y-2">
-          <Label>Branch</Label>
+        <div className="space-y-1.5">
+          <Label className={labelClass}>Branch</Label>
           {loadingBranches ? (
-            <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/50 px-3 text-sm text-muted-foreground">
+            <div className={cn(
+              "flex items-center gap-2 rounded-md border bg-muted/50 px-3 text-sm text-muted-foreground",
+              compact ? "h-9" : "h-10"
+            )}>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading branches...
+              Loading...
             </div>
           ) : (
             <Select value={selectedBranch} onValueChange={onBranchChange}>
-              <SelectTrigger>
+              <SelectTrigger className={inputHeight}>
                 <SelectValue placeholder="Select a branch" />
               </SelectTrigger>
               <SelectContent>
                 {localBranches.map((branch) => (
                   <SelectItem key={branch.name} value={branch.name}>
                     <div className="flex items-center gap-2">
-                      <GitBranch className="h-4 w-4" />
-                      {branch.name}
+                      <GitBranch className="h-3.5 w-3.5" />
+                      <span>{branch.name}</span>
                       {branch.isCurrent && (
-                        <span className="text-xs text-muted-foreground">
-                          (current)
-                        </span>
+                        <span className="text-xs text-muted-foreground">(current)</span>
                       )}
                     </div>
                   </SelectItem>
@@ -147,27 +154,25 @@ export function SourceSelector({
       )}
 
       {sourceType === 'commit' && (
-        <div className="space-y-2">
-          <Label>Select Commit</Label>
+        <div className="space-y-1.5">
+          <Label className={labelClass}>Commit</Label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search commits..."
               value={commitSearch}
               onChange={(e) => setCommitSearch(e.target.value)}
-              className="pl-9"
+              className={cn("pl-8", inputHeight)}
             />
           </div>
-          <ScrollArea className="h-[200px] rounded-md border">
+          <ScrollArea className="h-[140px] rounded-md border">
             {loadingCommits ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
             ) : filteredCommits.length === 0 ? (
-              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-                {commitSearch
-                  ? 'No commits match your search'
-                  : 'No commits found'}
+              <div className="py-6 text-center text-xs text-muted-foreground">
+                {commitSearch ? 'No matches' : 'No commits'}
               </div>
             ) : (
               <div className="p-1">
@@ -176,46 +181,32 @@ export function SourceSelector({
                     key={commit.hash}
                     type="button"
                     onClick={() => onCommitChange(commit)}
-                    className={`
-                      flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors
-                      ${
-                        selectedCommit?.hash === commit.hash
-                          ? 'bg-primary/15'
-                          : 'hover:bg-muted/50'
-                      }
-                    `}
+                    className={cn(
+                      'flex w-full items-start gap-2 rounded px-2 py-1.5 text-left transition-colors',
+                      selectedCommit?.hash === commit.hash
+                        ? 'bg-primary/10'
+                        : 'hover:bg-muted/50'
+                    )}
                   >
-                    <GitCommit
-                      className={`mt-0.5 h-4 w-4 shrink-0 ${
-                        selectedCommit?.hash === commit.hash
-                          ? 'text-primary'
-                          : 'text-muted-foreground'
-                      }`}
-                    />
+                    <GitCommit className={cn(
+                      'mt-0.5 h-3.5 w-3.5 shrink-0',
+                      selectedCommit?.hash === commit.hash ? 'text-primary' : 'text-muted-foreground'
+                    )} />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <code
-                          className={`
-                            shrink-0 rounded px-1.5 py-0.5 font-mono text-xs font-semibold
-                            ${
-                              selectedCommit?.hash === commit.hash
-                                ? 'bg-primary/10 text-primary'
-                                : 'bg-muted/50 text-foreground'
-                            }
-                          `}
-                        >
-                          {commit.shortHash || commit.hash?.slice(0, 7) || '???????'}
+                      <div className="flex items-center gap-1.5">
+                        <code className={cn(
+                          'shrink-0 rounded px-1 py-0.5 font-mono text-[10px] font-medium',
+                          selectedCommit?.hash === commit.hash
+                            ? 'bg-primary/10 text-primary'
+                            : 'bg-muted text-foreground'
+                        )}>
+                          {commit.shortHash || commit.hash?.slice(0, 7)}
                         </code>
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                          {commit.message}
-                        </span>
+                        <span className="truncate text-xs">{commit.message}</span>
                         {selectedCommit?.hash === commit.hash && (
-                          <Check className="h-4 w-4 shrink-0 text-primary" />
+                          <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-primary" />
                         )}
                       </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {commit.author}
-                      </p>
                     </div>
                   </button>
                 ))}
@@ -223,11 +214,8 @@ export function SourceSelector({
             )}
           </ScrollArea>
           {selectedCommit && (
-            <p className="text-xs text-muted-foreground">
-              Selected:{' '}
-              <code className="font-medium">{selectedCommit.shortHash}</code> -{' '}
-              {selectedCommit.message.slice(0, 50)}
-              {selectedCommit.message.length > 50 ? '...' : ''}
+            <p className="text-[10px] text-muted-foreground">
+              Selected: <code className="font-medium">{selectedCommit.shortHash}</code>
             </p>
           )}
         </div>
