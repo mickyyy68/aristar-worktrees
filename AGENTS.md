@@ -2,6 +2,20 @@
 
 This document provides guidelines for AI coding agents working on the Aristar Worktrees codebase.
 
+## Critical Guidelines
+
+1. **Keep AGENTS.md Updated**: When you make significant changes to the codebase structure, commands, or conventions, update this file to reflect those changes. This ensures future agents have accurate information.
+
+2. **Read Module READMEs First**: Before working on a module, always read its README.md file to understand the module's purpose, architecture, and conventions:
+   - `src-tauri/README.md` - Rust backend overview
+   - `src-tauri/src/core/README.md` - Core module documentation
+   - `src-tauri/src/worktrees/README.md` - Worktrees module documentation
+   - `src-tauri/src/agent_manager/README.md` - Agent manager documentation
+   - `src-tauri/src/tests/README.md` - Testing conventions
+   - `src/modules/core/README.md` - Frontend core module (UI, utils, commands)
+   - `src/modules/worktrees/README.md` - Frontend worktrees module
+   - `src/modules/agent-manager/README.md` - Frontend agent manager module
+
 ## Build & Development Commands
 
 ```bash
