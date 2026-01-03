@@ -32,12 +32,27 @@ import {
   legacyMessageCompleted,
   eventWithDifferentSession,
   createStreamingSequence,
+  messagePartToolPending,
+  messagePartToolRunning,
+  messagePartToolCompleted,
+  messagePartReasoning,
 } from '../mocks/opencode-events';
 
 // Extended message type for testing
 interface TestMessage extends OpenCodeMessage {
   parts?: unknown[];
   isStreaming?: boolean;
+}
+
+// Part type for the streaming ref
+interface StreamingPart {
+  type: string;
+  toolInvocationId?: string;
+  toolName?: string;
+  state?: string;
+  args?: unknown;
+  result?: unknown;
+  text?: string;
 }
 
 /**
@@ -48,6 +63,7 @@ function createEventHandler(agentId: string, sessionId: string) {
   let streamingMessageRef: {
     id: string;
     content: string;
+    parts: StreamingPart[];
     isStreaming: boolean;
   } | null = null;
 
@@ -76,7 +92,14 @@ function createEventHandler(agentId: string, sessionId: string) {
     if (!agentId || !sessionId) return;
 
     const props = event.properties as Record<string, unknown>;
-    const eventSessionId = (props?.sessionID as string) || (props?.info as { id?: string })?.id;
+    // sessionID location varies by event type:
+    // - Top level: props?.sessionID (session.status, session.idle events)
+    // - In info: props?.info?.sessionID (message.updated events)
+    // - In part: props?.part?.sessionID (message.part.updated events)
+    const eventSessionId = 
+      (props?.sessionID as string) || 
+      (props?.info as { sessionID?: string })?.sessionID ||
+      (props?.part as { sessionID?: string })?.sessionID;
 
     // Filter events by session ID (but allow events without session ID)
     if (eventSessionId && eventSessionId !== sessionId) {
@@ -105,7 +128,7 @@ function createEventHandler(agentId: string, sessionId: string) {
             parts: [],
             isStreaming: true,
           };
-          streamingMessageRef = { id: info.id, content: '', isStreaming: true };
+          streamingMessageRef = { id: info.id, content: '', parts: [], isStreaming: true };
 
           updateMessages(agentId, (messages) => [...messages, newMessage]);
           setAgentLoading(agentId, true);
@@ -114,12 +137,21 @@ function createEventHandler(agentId: string, sessionId: string) {
       }
 
       case 'message.part.updated': {
-        const part = props?.part as { type: string; messageID?: string; text?: string };
+        const part = props?.part as { 
+          type: string; 
+          messageID?: string; 
+          text?: string;
+          tool?: string;
+          callID?: string;
+          id?: string;
+          state?: { status?: string; input?: unknown; output?: unknown };
+        };
         const delta = props?.delta as string | undefined;
 
         if (!part) return;
 
-        // Create message if needed
+        // Try to find existing message - do NOT create new messages here
+        // Message creation should only happen in message.updated handler
         if (!streamingMessageRef && part.messageID) {
           const existingMessages = useAgentManagerStore.getState().agentMessages[agentId] || [];
           const existingMessage = existingMessages.find((m) => m.id === part.messageID);
@@ -127,20 +159,12 @@ function createEventHandler(agentId: string, sessionId: string) {
             streamingMessageRef = {
               id: existingMessage.id,
               content: existingMessage.content || '',
+              parts: ((existingMessage as TestMessage).parts || []) as StreamingPart[],
               isStreaming: true,
             };
           } else {
-            const newMessage: TestMessage = {
-              id: part.messageID,
-              role: 'assistant',
-              content: '',
-              timestamp: new Date(),
-              parts: [],
-              isStreaming: true,
-            };
-            streamingMessageRef = { id: part.messageID, content: '', isStreaming: true };
-            updateMessages(agentId, (messages) => [...messages, newMessage]);
-            setAgentLoading(agentId, true);
+            // Don't create - wait for message.updated
+            return;
           }
         }
 
@@ -148,17 +172,53 @@ function createEventHandler(agentId: string, sessionId: string) {
 
         if (part.messageID && streamingMessageRef.id !== part.messageID) return;
 
-        // Handle delta or full text
-        if (delta && typeof delta === 'string') {
-          streamingMessageRef.content += delta;
-        } else if (part.type === 'text' && part.text) {
-          streamingMessageRef.content = part.text;
+        // Handle different part types
+        if (part.type === 'text') {
+          if (delta && typeof delta === 'string') {
+            streamingMessageRef.content += delta;
+          } else if (part.text) {
+            streamingMessageRef.content = part.text;
+          }
+        } else if (part.type === 'tool') {
+          // Handle tool parts
+          const toolPart = {
+            type: 'tool-invocation' as const,
+            toolInvocationId: part.callID || part.id || '',
+            toolName: part.tool || '',
+            state: part.state?.status || 'pending',
+            args: part.state?.input,
+            result: part.state?.output,
+          };
+          
+          const existingIdx = streamingMessageRef.parts.findIndex(
+            (p) => (p as { toolInvocationId?: string }).toolInvocationId === toolPart.toolInvocationId
+          );
+          
+          if (existingIdx >= 0) {
+            streamingMessageRef.parts[existingIdx] = toolPart;
+          } else {
+            streamingMessageRef.parts.push(toolPart);
+          }
+        } else if (part.type === 'reasoning') {
+          // Handle reasoning parts
+          const reasoningPart = {
+            type: 'reasoning' as const,
+            text: part.text || '',
+          };
+          
+          const existingIdx = streamingMessageRef.parts.findIndex((p) => p.type === 'reasoning');
+          if (existingIdx >= 0) {
+            streamingMessageRef.parts[existingIdx] = reasoningPart;
+          } else {
+            streamingMessageRef.parts.push(reasoningPart);
+          }
         }
 
-        const currentContent = streamingMessageRef.content;
-        const currentId = streamingMessageRef.id;
+        const currentMessage = streamingMessageRef;
         updateMessages(agentId, (messages) =>
-          messages.map((m) => (m.id === currentId ? { ...m, content: currentContent } : m))
+          messages.map((m) => (m.id === currentMessage.id 
+            ? { ...m, content: currentMessage.content, parts: [...currentMessage.parts] } 
+            : m))
         );
         break;
       }
@@ -211,7 +271,7 @@ function createEventHandler(agentId: string, sessionId: string) {
           parts: [],
           isStreaming: true,
         };
-        streamingMessageRef = { id: info.id, content: '', isStreaming: true };
+        streamingMessageRef = { id: info.id, content: '', parts: [], isStreaming: true };
         updateMessages(agentId, (messages) => [...messages, newMessage]);
         setAgentLoading(agentId, true);
         break;
@@ -314,16 +374,95 @@ describe('SSE Event Handling', () => {
       expect(messages[0].content).toBe('This is the complete text.');
     });
 
-    it('should create message lazily if not exists', () => {
+    it('should ignore parts for unknown messages (wait for message.updated)', () => {
       const handleEvent = createEventHandler(TEST_AGENT_ID, TEST_SESSION_ID);
 
-      // Send part without prior message.updated
+      // Send part without prior message.updated - should be ignored
+      // This prevents user message parts from creating fake assistant messages
       handleEvent(messagePartUpdatedWithDelta);
 
       const messages = useAgentManagerStore.getState().agentMessages[TEST_AGENT_ID] || [];
-      expect(messages.length).toBe(1);
-      expect(messages[0].id).toBe(TEST_MESSAGE_ID);
-      expect(messages[0].content).toBe('Hello, ');
+      expect(messages.length).toBe(0); // No message created
+    });
+
+    it('should handle tool parts with pending state', () => {
+      const handleEvent = createEventHandler(TEST_AGENT_ID, TEST_SESSION_ID);
+
+      // Create message first
+      handleEvent(messageUpdatedAssistant);
+
+      // Send tool part
+      handleEvent(messagePartToolPending);
+
+      const messages = useAgentManagerStore.getState().agentMessages[TEST_AGENT_ID] || [];
+      const parts = (messages[0] as TestMessage).parts || [];
+      expect(parts.length).toBe(1);
+      
+      const toolPart = parts[0] as StreamingPart;
+      expect(toolPart.type).toBe('tool-invocation');
+      expect(toolPart.toolName).toBe('read');
+      expect(toolPart.state).toBe('pending');
+    });
+
+    it('should update tool part state from pending to running to completed', () => {
+      const handleEvent = createEventHandler(TEST_AGENT_ID, TEST_SESSION_ID);
+
+      // Create message first
+      handleEvent(messageUpdatedAssistant);
+
+      // Send tool parts in sequence
+      handleEvent(messagePartToolPending);
+      handleEvent(messagePartToolRunning);
+      handleEvent(messagePartToolCompleted);
+
+      const messages = useAgentManagerStore.getState().agentMessages[TEST_AGENT_ID] || [];
+      const parts = (messages[0] as TestMessage).parts || [];
+      
+      // Should still be 1 part (updated, not added)
+      expect(parts.length).toBe(1);
+      
+      const toolPart = parts[0] as StreamingPart;
+      expect(toolPart.state).toBe('completed');
+      expect(toolPart.result).toBe('file contents here');
+    });
+
+    it('should handle reasoning parts', () => {
+      const handleEvent = createEventHandler(TEST_AGENT_ID, TEST_SESSION_ID);
+
+      // Create message first
+      handleEvent(messageUpdatedAssistant);
+
+      // Send reasoning part
+      handleEvent(messagePartReasoning);
+
+      const messages = useAgentManagerStore.getState().agentMessages[TEST_AGENT_ID] || [];
+      const parts = (messages[0] as TestMessage).parts || [];
+      expect(parts.length).toBe(1);
+      
+      const reasoningPart = parts[0] as StreamingPart;
+      expect(reasoningPart.type).toBe('reasoning');
+      expect(reasoningPart.text).toContain('user is asking me to read a file');
+    });
+
+    it('should handle mixed text, tool, and reasoning parts', () => {
+      const handleEvent = createEventHandler(TEST_AGENT_ID, TEST_SESSION_ID);
+
+      // Create message first
+      handleEvent(messageUpdatedAssistant);
+
+      // Send various parts
+      handleEvent(messagePartUpdatedWithDelta);
+      handleEvent(messagePartToolPending);
+      handleEvent(messagePartReasoning);
+      handleEvent(messagePartUpdatedWithDelta2);
+
+      const messages = useAgentManagerStore.getState().agentMessages[TEST_AGENT_ID] || [];
+      expect(messages[0].content).toBe('Hello, world!'); // Text accumulated
+      
+      const parts = (messages[0] as TestMessage).parts as StreamingPart[] || [];
+      expect(parts.length).toBe(2); // tool + reasoning
+      expect(parts.some((p: StreamingPart) => p.type === 'tool-invocation')).toBe(true);
+      expect(parts.some((p: StreamingPart) => p.type === 'reasoning')).toBe(true);
     });
   });
 

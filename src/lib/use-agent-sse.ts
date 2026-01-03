@@ -86,7 +86,11 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
     console.log('[SSE] Event props:', JSON.stringify(props, null, 2));
     
     // Filter events by session ID
-    const eventSessionId = props?.sessionID || props?.info?.id;
+    // sessionID location varies by event type:
+    // - Top level: props?.sessionID (session.status, session.idle events)
+    // - In info: props?.info?.sessionID (message.updated events)
+    // - In part: props?.part?.sessionID (message.part.updated events)
+    const eventSessionId = props?.sessionID || props?.info?.sessionID || props?.part?.sessionID;
     console.log('[SSE] Session ID check:', { eventSessionId, expectedSessionId: sessionId, match: eventSessionId === sessionId });
     
     // Don't filter out events without session ID (like server.connected, heartbeat)
@@ -151,7 +155,9 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
           return;
         }
         
-        // If we don't have a streaming message yet, create one
+        // If we don't have a streaming message yet, try to find an existing one
+        // NOTE: We should NOT create new messages here - message.updated handles creation
+        // Creating messages here caused user message parts to create duplicate "assistant" messages
         if (!streamingMessageRef.current && part.messageID) {
           console.log('[SSE] message.part.updated - no streaming message, looking for existing');
           const existingMessages = useAgentManagerStore.getState().agentMessages[agentId] || [];
@@ -164,19 +170,10 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
             } as StreamingMessage;
             console.log('[SSE] message.part.updated - created streaming ref from existing message');
           } else {
-            // Create a new message if we don't have one
-            console.log('[SSE] message.part.updated - creating new message for part');
-            const newMessage: StreamingMessage = {
-              id: part.messageID,
-              role: 'assistant',
-              content: '',
-              timestamp: new Date(),
-              parts: [],
-              isStreaming: true,
-            };
-            streamingMessageRef.current = newMessage;
-            updateMessages(agentId, (messages) => [...messages, newMessage as OpenCodeMessage]);
-            setAgentLoading(agentId, true);
+            // Don't create a new message here - wait for message.updated event
+            // This prevents user message parts from creating fake "assistant" messages
+            console.log('[SSE] message.part.updated - message not found, waiting for message.updated');
+            return;
           }
         }
         
@@ -190,22 +187,72 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
           return;
         }
 
-        // Handle text delta - accumulate content
-        if (delta && typeof delta === 'string') {
-          streamingMessageRef.current.content += delta;
-          console.log('[SSE] message.part.updated - appended delta, content length:', streamingMessageRef.current.content.length);
-        } else if (part.type === 'text' && part.text) {
-          // Full text update (non-delta)
-          streamingMessageRef.current.content = part.text;
-          console.log('[SSE] message.part.updated - set full text, content length:', streamingMessageRef.current.content.length);
+        // Handle different part types
+        if (part.type === 'text') {
+          // Handle text delta - accumulate content
+          if (delta && typeof delta === 'string') {
+            streamingMessageRef.current.content += delta;
+            console.log('[SSE] message.part.updated - appended delta, content length:', streamingMessageRef.current.content.length);
+          } else if (part.text) {
+            // Full text update (non-delta)
+            streamingMessageRef.current.content = part.text;
+            console.log('[SSE] message.part.updated - set full text, content length:', streamingMessageRef.current.content.length);
+          }
+        } else if (part.type === 'tool') {
+          // Handle tool invocation part
+          console.log('[SSE] message.part.updated - tool part:', { tool: part.tool, callID: part.callID, status: part.state?.status });
+          
+          const toolPart: MessagePart = {
+            type: 'tool-invocation',
+            toolInvocationId: part.callID || part.id,
+            toolName: part.tool,
+            state: part.state?.status || 'pending',
+            args: part.state?.input,
+            result: part.state?.output,
+          };
+          
+          // Update or add the tool part
+          const existingPartIndex = streamingMessageRef.current.parts.findIndex(
+            (p) => p.type === 'tool-invocation' && (p as { toolInvocationId?: string }).toolInvocationId === toolPart.toolInvocationId
+          );
+          
+          if (existingPartIndex >= 0) {
+            streamingMessageRef.current.parts[existingPartIndex] = toolPart;
+            console.log('[SSE] message.part.updated - updated existing tool part');
+          } else {
+            streamingMessageRef.current.parts.push(toolPart);
+            console.log('[SSE] message.part.updated - added new tool part');
+          }
+        } else if (part.type === 'reasoning') {
+          // Handle reasoning part - store the reasoning text
+          console.log('[SSE] message.part.updated - reasoning part, text length:', part.text?.length || 0);
+          
+          // Find or create reasoning part
+          const existingReasoningIndex = streamingMessageRef.current.parts.findIndex(
+            (p) => p.type === 'reasoning'
+          );
+          
+          const reasoningPart: MessagePart = {
+            type: 'reasoning',
+            text: part.text || '',
+          };
+          
+          if (existingReasoningIndex >= 0) {
+            streamingMessageRef.current.parts[existingReasoningIndex] = reasoningPart;
+          } else {
+            streamingMessageRef.current.parts.push(reasoningPart);
+          }
+        } else {
+          // Handle unknown part types - just log them
+          console.log('[SSE] message.part.updated - unknown part type:', part.type);
         }
 
-        // Update message in store
+        // Update message in store with both content and parts
         const currentMessage = streamingMessageRef.current;
         updateMessages(agentId, (messages) =>
           messages.map((m) =>
             m.id === currentMessage.id
-              ? { ...m, content: currentMessage.content }
+              ? { ...m, content: currentMessage.content, parts: [...currentMessage.parts] }
               : m
           )
         );

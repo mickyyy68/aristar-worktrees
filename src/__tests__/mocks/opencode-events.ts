@@ -30,13 +30,24 @@ export const serverConnectedEvent: MockEventData = {
 /**
  * message.updated event - signals a new message or message update
  * This is used instead of message.created in the actual OpenCode implementation
+ * 
+ * IMPORTANT: In real OpenCode, sessionID is nested inside `info`, not at the top level!
+ * Example from real logs:
+ * {
+ *   "info": {
+ *     "id": "msg_xxx",
+ *     "sessionID": "ses_xxx",  // <-- sessionID is HERE
+ *     "role": "assistant",
+ *     ...
+ *   }
+ * }
  */
 export const messageUpdatedAssistant: MockEventData = {
   type: 'message.updated',
   properties: {
-    sessionID: TEST_SESSION_ID,
     info: {
       id: TEST_MESSAGE_ID,
+      sessionID: TEST_SESSION_ID,  // sessionID inside info, matching real OpenCode
       role: 'assistant',
       time: {
         created: '2026-01-03T12:00:00.000Z',
@@ -48,9 +59,9 @@ export const messageUpdatedAssistant: MockEventData = {
 export const messageUpdatedUser: MockEventData = {
   type: 'message.updated',
   properties: {
-    sessionID: TEST_SESSION_ID,
     info: {
       id: 'msg-user-001',
+      sessionID: TEST_SESSION_ID,  // sessionID inside info, matching real OpenCode
       role: 'user',
       time: {
         created: '2026-01-03T11:59:00.000Z',
@@ -184,7 +195,107 @@ export const legacyMessageCompleted: MockEventData = {
 };
 
 /**
- * Tool invocation part update
+ * Tool invocation part update - pending state
+ * This matches the real OpenCode structure where:
+ * - sessionID is inside the part object
+ * - type is 'tool' (not 'tool-invocation')
+ * - state is an object with status, input, output
+ */
+export const messagePartToolPending: MockEventData = {
+  type: 'message.part.updated',
+  properties: {
+    part: {
+      id: 'prt_tool001',
+      sessionID: TEST_SESSION_ID,
+      messageID: TEST_MESSAGE_ID,
+      type: 'tool',
+      callID: 'call_001',
+      tool: 'read',
+      state: {
+        status: 'pending',
+        input: {},
+        raw: '',
+      },
+    },
+  },
+};
+
+/**
+ * Tool invocation part update - running state
+ */
+export const messagePartToolRunning: MockEventData = {
+  type: 'message.part.updated',
+  properties: {
+    part: {
+      id: 'prt_tool001',
+      sessionID: TEST_SESSION_ID,
+      messageID: TEST_MESSAGE_ID,
+      type: 'tool',
+      callID: 'call_001',
+      tool: 'read',
+      state: {
+        status: 'running',
+        input: {
+          filePath: '/test/file.txt',
+        },
+        time: {
+          start: Date.now(),
+        },
+      },
+    },
+  },
+};
+
+/**
+ * Tool invocation part update - completed state
+ */
+export const messagePartToolCompleted: MockEventData = {
+  type: 'message.part.updated',
+  properties: {
+    part: {
+      id: 'prt_tool001',
+      sessionID: TEST_SESSION_ID,
+      messageID: TEST_MESSAGE_ID,
+      type: 'tool',
+      callID: 'call_001',
+      tool: 'read',
+      state: {
+        status: 'completed',
+        input: {
+          filePath: '/test/file.txt',
+        },
+        output: 'file contents here',
+        time: {
+          start: Date.now() - 100,
+          end: Date.now(),
+        },
+      },
+    },
+  },
+};
+
+/**
+ * Reasoning part update
+ */
+export const messagePartReasoning: MockEventData = {
+  type: 'message.part.updated',
+  properties: {
+    part: {
+      id: 'prt_reasoning001',
+      sessionID: TEST_SESSION_ID,
+      messageID: TEST_MESSAGE_ID,
+      type: 'reasoning',
+      text: 'The user is asking me to read a file. I should use the read tool to accomplish this task.',
+      time: {
+        start: Date.now() - 1000,
+        end: Date.now(),
+      },
+    },
+  },
+};
+
+/**
+ * Legacy tool invocation format (for backwards compatibility)
  */
 export const messagePartToolInvocation: MockEventData = {
   type: 'message.part.updated',
@@ -207,9 +318,9 @@ export const messagePartToolInvocation: MockEventData = {
 export const eventWithDifferentSession: MockEventData = {
   type: 'message.updated',
   properties: {
-    sessionID: 'different-session-456',
     info: {
       id: 'msg-other-001',
+      sessionID: 'different-session-456',  // Different session - should be filtered
       role: 'assistant',
       time: {
         created: '2026-01-03T12:00:00.000Z',
@@ -228,20 +339,20 @@ export function createStreamingSequence(
 ): MockEventData[] {
   const events: MockEventData[] = [];
 
-  // Message created/updated
+  // Message created/updated - sessionID inside info (matching real OpenCode)
   events.push({
     type: 'message.updated',
     properties: {
-      sessionID: sessionId,
       info: {
         id: messageId,
+        sessionID: sessionId,
         role: 'assistant',
         time: { created: new Date().toISOString() },
       },
     },
   });
 
-  // Text deltas
+  // Text deltas - sessionID at top level for message.part.updated
   for (const chunk of textChunks) {
     events.push({
       type: 'message.part.updated',
@@ -253,7 +364,7 @@ export function createStreamingSequence(
     });
   }
 
-  // Session idle
+  // Session idle - sessionID at top level for session.status
   events.push({
     type: 'session.status',
     properties: {
@@ -282,6 +393,10 @@ export const allMockEvents = {
   sessionIdleEvent,
   legacyMessageCreated,
   legacyMessageCompleted,
+  messagePartToolPending,
+  messagePartToolRunning,
+  messagePartToolCompleted,
+  messagePartReasoning,
   messagePartToolInvocation,
   eventWithDifferentSession,
 };

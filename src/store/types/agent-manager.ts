@@ -131,7 +131,7 @@ export interface ToolInvocationPart {
   type: 'tool-invocation';
   toolInvocationId: string;
   toolName: string;
-  state: 'pending' | 'result' | 'error';
+  state: 'pending' | 'running' | 'result' | 'error' | 'completed';
   args?: unknown;
   result?: unknown;
 }
