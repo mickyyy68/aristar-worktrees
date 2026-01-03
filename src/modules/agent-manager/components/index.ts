@@ -20,3 +20,4 @@ export { SourceSelector } from './source-selector';
 export { StatusBadge } from './status-badge';
 export { TaskEmptyState } from './task-empty-state';
 export { TaskListSidebar } from './task-list-sidebar';
+export { OptimizationPopover } from './optimization-popover';

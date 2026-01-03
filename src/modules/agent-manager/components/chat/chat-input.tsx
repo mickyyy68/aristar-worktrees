@@ -4,8 +4,10 @@ import { Button } from '@core/ui/button';
 import { Textarea } from '@core/ui/textarea';
 import { Switch } from '@core/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@core/ui/tooltip';
+import { Popover, PopoverAnchor } from '@core/ui/popover';
 import { cn } from '@core/lib/utils';
 import { useAppStore } from '@/store/use-app-store';
+import { OptimizationPopover } from '../optimization-popover';
 import type { TaskAgent } from '../../store/types';
 
 interface ChatInputProps {
@@ -23,6 +25,13 @@ interface ChatInputProps {
   onRemove?: () => void;
   onOptimize?: (prompt: string) => void;
   isOptimizing?: boolean;
+  // Optimization popover props
+  optimizationPopoverOpen?: boolean;
+  onOptimizationPopoverChange?: (open: boolean) => void;
+  originalPrompt?: string;
+  optimizedPrompt?: string;
+  onAcceptOptimized?: (prompt: string) => void;
+  onDismissOptimization?: () => void;
 }
 
 export interface ChatInputRef {
@@ -46,6 +55,13 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
     onRemove,
     onOptimize,
     isOptimizing = false,
+    // Optimization popover props
+    optimizationPopoverOpen = false,
+    onOptimizationPopoverChange,
+    originalPrompt = '',
+    optimizedPrompt = '',
+    onAcceptOptimized,
+    onDismissOptimization,
   },
   ref
 ) {
@@ -209,34 +225,48 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
           <div className="w-px h-5 bg-border/60 mx-1" />
 
           {onOptimize && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-7 w-7 text-muted-foreground hover:text-foreground",
-                    isOptimizing && "animate-pulse text-primary",
-                    !hasOptimizationModel && "opacity-50 cursor-not-allowed"
-                  )}
-                  onClick={handleOptimize}
-                  disabled={disabled || isLoading || isOptimizing || !message.trim() || !hasOptimizationModel}
-                >
-                  {isOptimizing ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Wand2 className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {isOptimizing 
-                  ? 'Optimizing...' 
-                  : !hasOptimizationModel 
-                    ? 'Set a model in Settings to enable' 
-                    : 'Optimize prompt'}
-              </TooltipContent>
-            </Tooltip>
+            <Popover open={optimizationPopoverOpen} onOpenChange={onOptimizationPopoverChange}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <PopoverAnchor asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-7 w-7 text-muted-foreground hover:text-foreground",
+                        isOptimizing && "animate-pulse text-primary",
+                        !hasOptimizationModel && "opacity-50 cursor-not-allowed"
+                      )}
+                      onClick={handleOptimize}
+                      disabled={disabled || isLoading || isOptimizing || !message.trim() || !hasOptimizationModel}
+                    >
+                      {isOptimizing ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Wand2 className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </PopoverAnchor>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {isOptimizing 
+                    ? 'Optimizing...' 
+                    : !hasOptimizationModel 
+                      ? 'Set a model in Settings to enable' 
+                      : 'Optimize prompt'}
+                </TooltipContent>
+              </Tooltip>
+              {onAcceptOptimized && onDismissOptimization && onOptimizationPopoverChange && (
+                <OptimizationPopover
+                  originalPrompt={originalPrompt}
+                  optimizedPrompt={optimizedPrompt}
+                  onAccept={onAcceptOptimized}
+                  onDismiss={onDismissOptimization}
+                  isOpen={optimizationPopoverOpen}
+                  onOpenChange={onOptimizationPopoverChange}
+                />
+              )}
+            </Popover>
           )}
 
           <Button

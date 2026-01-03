@@ -7,7 +7,7 @@ import { AgentTabs } from './agent-tabs';
 import { ChatView } from './chat/chat-view';
 import { ChatInput, type ChatInputRef } from './chat/chat-input';
 import { CreateTaskDialog } from './create-task-dialog';
-import { OptimizationReviewDialog } from './optimization-review-dialog';
+
 import { StatusBadge } from './status-badge';
 import { useAgentManagerStore, getAgentKey } from '../store/agent-manager-store';
 import { useAppStore } from '@/store/use-app-store';
@@ -42,8 +42,8 @@ export function AgentManagerView() {
   const [stopAgentConfirm, setStopAgentConfirm] = useState(false);
   const [removeAgentConfirm, setRemoveAgentConfirm] = useState(false);
 
-  // Optimization state
-  const [optimizationDialogOpen, setOptimizationDialogOpen] = useState(false);
+  // Optimization popover state
+  const [optimizationPopoverOpen, setOptimizationPopoverOpen] = useState(false);
   const [originalPrompt, setOriginalPrompt] = useState('');
   const [optimizedPrompt, setOptimizedPrompt] = useState('');
   const chatInputRef = useRef<ChatInputRef>(null);
@@ -207,20 +207,20 @@ export function AgentManagerView() {
     const result = await optimize(prompt, currentRepo.path, model);
     if (result) {
       setOptimizedPrompt(result);
-      setOptimizationDialogOpen(true);
+      setOptimizationPopoverOpen(true);
     }
   }, [currentRepo, optimize]);
 
   const handleAcceptOptimized = useCallback((acceptedPrompt: string) => {
     // Replace the message in the chat input
     chatInputRef.current?.setMessage(acceptedPrompt);
-    setOptimizationDialogOpen(false);
+    setOptimizationPopoverOpen(false);
     setOriginalPrompt('');
     setOptimizedPrompt('');
   }, []);
 
-  const handleCancelOptimization = useCallback(() => {
-    setOptimizationDialogOpen(false);
+  const handleDismissOptimization = useCallback(() => {
+    setOptimizationPopoverOpen(false);
     setOriginalPrompt('');
     setOptimizedPrompt('');
   }, []);
@@ -315,6 +315,13 @@ export function AgentManagerView() {
                 onRemove={handleRemoveAgent}
                 onOptimize={activeAgent && currentRepo ? handleOptimize : undefined}
                 isOptimizing={isOptimizing}
+                // Optimization popover props
+                optimizationPopoverOpen={optimizationPopoverOpen}
+                onOptimizationPopoverChange={setOptimizationPopoverOpen}
+                originalPrompt={originalPrompt}
+                optimizedPrompt={optimizedPrompt}
+                onAcceptOptimized={handleAcceptOptimized}
+                onDismissOptimization={handleDismissOptimization}
               />
             </div>
           </div>
@@ -329,15 +336,7 @@ export function AgentManagerView() {
         onOpenChange={setCreateDialogOpen}
       />
 
-      {/* Optimization Review Dialog */}
-      <OptimizationReviewDialog
-        open={optimizationDialogOpen}
-        onOpenChange={setOptimizationDialogOpen}
-        originalPrompt={originalPrompt}
-        optimizedPrompt={optimizedPrompt}
-        onAccept={handleAcceptOptimized}
-        onCancel={handleCancelOptimization}
-      />
+
 
       {/* Delete Task Confirmation */}
       {deleteConfirmTask && (
