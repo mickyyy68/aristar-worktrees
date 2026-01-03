@@ -23,6 +23,7 @@ import {
 import { AppIcon } from '@core/ui/app-icon';
 import { Switch } from '@core/ui/switch';
 import { useAppStore } from '@/store/use-app-store';
+import { commands } from '@core/lib';
 import type { TerminalApp, EditorApp, ToolOutputVisibility, ColorScheme, OptimizationModelSelection } from '@/store/types';
 import { getThemeByName, getEffectiveColorScheme } from '@core/lib/themes';
 import { ThemeSelector } from './theme-selector';
@@ -50,7 +51,7 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const { settings, setSettings } = useAppStore();
+  const { settings, setSettings, repositories, selectedRepositoryId } = useAppStore();
 
   // Active tab
   const [activeTab, setActiveTab] = useState<TabId>('theme');
@@ -95,24 +96,39 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   // Load providers when optimization tab is active
   const loadProviders = useCallback(async () => {
     if (providers.length > 0 || loadingProviders) return;
-    
+
+    const selectedRepo = repositories.find((r) => r.id === selectedRepositoryId);
+    if (!selectedRepo) {
+      setProvidersError('Select a repository to load models');
+      return;
+    }
+
     setLoadingProviders(true);
     setProvidersError(null);
-    
+
     try {
-      // Try to get providers from any running OpenCode instance
-      // First, try a common default port
-      const defaultPort = 8080;
-      opencodeClient.connect(defaultPort);
+      const port = await commands.startOpencode(selectedRepo.path);
+      opencodeClient.connect(port);
+
+      const isReady = await opencodeClient.waitForReady();
+      if (!isReady) {
+        throw new Error('OpenCode server did not become ready');
+      }
+
       const result = await opencodeClient.getProviders();
       setProviders(result.providers);
     } catch (err) {
       console.log('[SettingsDialog] Failed to load providers:', err);
-      setProvidersError('Could not connect to OpenCode. Make sure an agent is running.');
+      const errorMsg = String(err);
+      if (errorMsg.includes('not found') || errorMsg.includes('No such file')) {
+        setProvidersError('OpenCode not found. Install from https://opencode.ai');
+      } else {
+        setProvidersError('Could not load models. Make sure an agent is running.');
+      }
     } finally {
       setLoadingProviders(false);
     }
-  }, [providers.length, loadingProviders]);
+  }, [providers.length, loadingProviders, repositories, selectedRepositoryId]);
 
   useEffect(() => {
     if (open && activeTab === 'optimization') {
