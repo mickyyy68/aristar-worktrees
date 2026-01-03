@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FolderGit2, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { FolderGit2, Trash2, ChevronDown, ChevronRight, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { ScrollArea } from '@core/ui/scroll-area';
 import { Separator } from '@core/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@core/ui/tooltip';
+import { Button } from '@core/ui/button';
 import { useAppStore } from '@/store/use-app-store';
 import { getRepositoryName, truncatePath } from '@core/lib/utils';
+import { cn } from '@core/lib/utils';
 
 interface RepositorySidebarProps {
   onSelectRepository: (id: string) => void;
@@ -14,8 +16,11 @@ interface RepositorySidebarProps {
 }
 
 export function RepositorySidebar({ onSelectRepository, onRemoveRepository }: RepositorySidebarProps) {
-  const { repositories, selectedRepositoryId } = useAppStore();
+  const { repositories, selectedRepositoryId, settings, setSettings } = useAppStore();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  
+  const isCollapsed = settings.sidebarCollapsed;
+  const toggleSidebar = () => setSettings({ sidebarCollapsed: !isCollapsed });
 
   useEffect(() => {
     if (repositories.length > 0 && !selectedRepositoryId) {
@@ -44,10 +49,58 @@ export function RepositorySidebar({ onSelectRepository, onRemoveRepository }: Re
     }
   };
 
+  if (isCollapsed) {
+    return (
+      <aside className="flex h-full w-12 flex-col border-r bg-sidebar">
+        <div className="flex items-center justify-center p-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={toggleSidebar}>
+                <PanelLeft className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Expand sidebar</TooltipContent>
+          </Tooltip>
+        </div>
+        <Separator />
+        <ScrollArea className="flex-1">
+          <div className="flex flex-col items-center gap-1 p-2">
+            {repositories.map((repo) => (
+              <Tooltip key={repo.id}>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => handleSelect(repo.id)}
+                    className={cn(
+                      'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
+                      selectedRepositoryId === repo.id
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                        : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                    )}
+                  >
+                    <FolderGit2 className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{getRepositoryName(repo.path)}</TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
+        </ScrollArea>
+      </aside>
+    );
+  }
+
   return (
     <aside className="flex h-full w-64 flex-col border-r bg-sidebar">
-      <div className="p-4">
+      <div className="flex items-center justify-between p-4">
         <h2 className="text-sm font-semibold text-sidebar-foreground">Repositories</h2>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={toggleSidebar}>
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Collapse sidebar</TooltipContent>
+        </Tooltip>
       </div>
       <Separator />
       <ScrollArea className="flex-1">

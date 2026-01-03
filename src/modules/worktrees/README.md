@@ -82,13 +82,14 @@ import { WorktreeCard } from '@worktrees/components';
 
 ### `RepositorySidebar`
 
-Sidebar showing all repositories with selection state.
+Sidebar showing all repositories with selection state. The sidebar can be collapsed/expanded using the toggle button.
 
 ```typescript
 import { RepositorySidebar } from '@worktrees/components';
 
 <RepositorySidebar
-  onAddRepository={() => setAddDialogOpen(true)}
+  onSelectRepository={(id) => setSelectedRepository(id)}
+  onRemoveRepository={(id) => removeRepository(id)}
 />
 ```
 
@@ -97,6 +98,15 @@ import { RepositorySidebar } from '@worktrees/components';
 - Repository selection (stored in global state)
 - Add/remove repository actions
 - Repository name and path display
+- Collapsible sidebar (state stored in app settings)
+- Collapsed mode shows only icons with tooltips
+
+**Props:**
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `onSelectRepository` | `(id) => void` | Called when a repository is selected |
+| `onRemoveRepository` | `(id) => void` | Called when repository removal is requested |
 
 ### `CreateWorktreeDialog`
 

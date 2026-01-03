@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { GitBranch, Star, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { GitBranch, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@core/ui/button';
 import { TaskListSidebar } from './task-list-sidebar';
 import { TaskEmptyState } from './task-empty-state';
 import { AgentTabs } from './agent-tabs';
 import { ChatView } from './chat/chat-view';
 import { ChatInput } from './chat/chat-input';
-import { AgentActions, AgentToolbarActions } from './agent-actions';
 import { CreateTaskDialog } from './create-task-dialog';
 import { StatusBadge } from './status-badge';
 import { useAgentManagerStore, getAgentKey } from '../store/agent-manager-store';
@@ -191,108 +190,80 @@ export function AgentManagerView() {
       {/* Main Content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {activeTask ? (
-          <>
-            {/* Task Header */}
-            <TaskHeader
-              task={activeTask}
-              onDelete={() => setDeleteConfirmTask(activeTask)}
-            />
+          <div className="flex flex-1 flex-col items-center overflow-hidden">
+            <div className="flex w-full max-w-3xl flex-1 flex-col overflow-hidden pt-4">
+              {/* Task Header - minimal, centered */}
+              <TaskHeader
+                task={activeTask}
+                onDelete={() => setDeleteConfirmTask(activeTask)}
+              />
 
-            {/* Agent Tabs */}
-            <AgentTabs
-              agents={activeTask.agents}
-              activeAgentId={activeAgentId}
-              onSelectAgent={handleSelectAgent}
-              orphanedAgentIds={orphanedAgents[activeTask.id] || []}
-            />
+              {/* Agent Tabs - bigger cards for multi-agent */}
+              <AgentTabs
+                agents={activeTask.agents}
+                activeAgentId={activeAgentId}
+                onSelectAgent={handleSelectAgent}
+                orphanedAgentIds={orphanedAgents[activeTask.id] || []}
+              />
 
-            {/* Agent Toolbar */}
-            {activeAgent && activeAgentId && isAgentOrphaned(activeTask.id, activeAgentId) ? (
-              // Orphaned agent toolbar
-              <div className="flex items-center justify-between border-b bg-destructive/10 px-4 py-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <AlertTriangle className="h-4 w-4 text-destructive" />
-                  <span className="font-medium text-destructive">
-                    Worktree Missing
-                  </span>
-                  <span className="text-muted-foreground">
-                    - {activeAgent.providerId}/{activeAgent.modelId}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={async () => {
-                      await recreateAgentWorktree(activeTask.id, activeAgentId);
-                    }}
-                  >
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Recreate Worktree
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={handleRemoveAgent}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Remove Agent
-                  </Button>
-                </div>
-              </div>
-            ) : activeAgent && (
-              // Normal agent toolbar
-              <div className="flex items-center justify-between border-b bg-card px-4 py-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {activeAgent.providerId}/{activeAgent.modelId}
-                  </span>
-                  <StatusBadge status={activeAgent.status} size="sm" />
-                  {activeAgent.accepted && (
-                    <span className="flex items-center gap-1 text-yellow-600">
-                      <Star className="h-3.5 w-3.5 fill-current" />
-                      Accepted
+              {/* Orphaned agent warning */}
+              {activeAgent && activeAgentId && isAgentOrphaned(activeTask.id, activeAgentId) && (
+                <div className="flex items-center justify-between rounded-lg bg-destructive/10 px-4 py-2 mb-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                    <span className="font-medium text-destructive">
+                      Worktree Missing
                     </span>
-                  )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        await recreateAgentWorktree(activeTask.id, activeAgentId);
+                      }}
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Recreate
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleRemoveAgent}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Remove
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <AgentToolbarActions
-                    agent={activeAgent}
-                    onAccept={handleAcceptAgent}
-                    onOpenTerminal={handleOpenTerminal}
-                    onOpenEditor={handleOpenEditor}
-                  />
-                  <AgentActions
-                    agent={activeAgent}
-                    onStop={handleStopAgent}
-                    onAccept={handleAcceptAgent}
-                    onOpenTerminal={handleOpenTerminal}
-                    onOpenEditor={handleOpenEditor}
-                    onRevealInFinder={handleRevealInFinder}
-                    onRemove={handleRemoveAgent}
-                  />
-                </div>
+              )}
+
+              {/* Chat Area */}
+              <div className="flex-1 overflow-hidden">
+                <ChatView messages={messages} isLoading={isLoading} />
               </div>
-            )}
 
-            {/* Chat Area */}
-            <div className="flex-1 overflow-hidden">
-              <ChatView messages={messages} isLoading={isLoading} />
+              {/* Chat Input with agent actions */}
+              <ChatInput
+                onSend={handleSendMessage}
+                isLoading={isLoading}
+                disabled={!activeAgent}
+                agentCount={activeTask.agents.length}
+                placeholder={
+                  activeAgent
+                    ? 'Ask follow-ups in the worktree'
+                    : 'Select an agent to send messages'
+                }
+                agent={activeAgent}
+                onAccept={handleAcceptAgent}
+                onStop={handleStopAgent}
+                onOpenTerminal={handleOpenTerminal}
+                onOpenEditor={handleOpenEditor}
+                onRevealInFinder={handleRevealInFinder}
+                onRemove={handleRemoveAgent}
+              />
             </div>
-
-            {/* Chat Input */}
-            <ChatInput
-              onSend={handleSendMessage}
-              isLoading={isLoading}
-              disabled={!activeAgent}
-              agentCount={activeTask.agents.length}
-              placeholder={
-                activeAgent
-                  ? 'Send a follow-up message...'
-                  : 'Select an agent to send messages'
-              }
-            />
-          </>
+          </div>
         ) : (
           <TaskEmptyState onCreateTask={() => setCreateDialogOpen(true)} />
         )}
@@ -385,36 +356,50 @@ export function AgentManagerView() {
   );
 }
 
-// Task Header Component
+// Task Header Component - minimal, centered
 interface TaskHeaderProps {
   task: Task;
   onDelete: () => void;
 }
 
+function formatTimestamp(timestamp: number): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays < 7) return `${diffDays}d`;
+  return date.toLocaleDateString();
+}
+
 function TaskHeader({ task, onDelete }: TaskHeaderProps) {
   return (
-    <div className="flex items-center justify-between border-b bg-card px-6 py-4">
-      <div className="flex items-center gap-4">
+    <div className="mb-2">
+      <div className="flex items-start justify-between">
         <div>
           <h2 className="text-lg font-semibold">{task.name}</h2>
-          <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
+          <div className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
+            <span>{formatTimestamp(task.updatedAt)}</span>
+            <span className="opacity-50">|</span>
             <span className="flex items-center gap-1">
-              <GitBranch className="h-4 w-4" />
+              <GitBranch className="h-3 w-3" />
               {task.sourceType === 'commit'
-                ? `Commit: ${task.sourceCommit?.slice(0, 7)}`
-                : task.sourceBranch || 'current branch'}
+                ? task.sourceCommit?.slice(0, 7)
+                : task.sourceBranch || 'current'}
             </span>
-            <span>|</span>
-            <span>
-              {task.agents.length} agent{task.agents.length !== 1 ? 's' : ''}
-            </span>
+            <span className="opacity-50">|</span>
+            <StatusBadge status={task.status} size="sm" />
           </div>
         </div>
-        <StatusBadge status={task.status} />
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={onDelete} title="Delete task">
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
-      <Button variant="ghost" size="icon" onClick={onDelete} title="Delete task">
-        <Trash2 className="h-4 w-4" />
-      </Button>
     </div>
   );
 }

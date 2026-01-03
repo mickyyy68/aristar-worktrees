@@ -53,6 +53,7 @@ const defaultSettings: AppSettings = {
     outputVisibility: 'hidden',
     truncatedOutputLines: 10,
   },
+  sidebarCollapsed: false,
 };
 
 export const useAppStore = create<AppState>()(

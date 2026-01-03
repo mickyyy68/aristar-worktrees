@@ -1,8 +1,10 @@
-import { Plus, Clock } from 'lucide-react';
+import { Plus, Clock, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { Button } from '@core/ui/button';
 import { ScrollArea } from '@core/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@core/ui/tooltip';
 import { StatusDot } from './status-badge';
 import { cn } from '@core/lib/utils';
+import { useAppStore } from '@/store/use-app-store';
 import type { Task } from '../store/types';
 
 interface TaskListSidebarProps {
@@ -50,16 +52,75 @@ export function TaskListSidebar({
   onCreateTask,
   isLoading = false,
 }: TaskListSidebarProps) {
+  const { settings, setSettings } = useAppStore();
+  const isCollapsed = settings.sidebarCollapsed;
+  const toggleSidebar = () => setSettings({ sidebarCollapsed: !isCollapsed });
+
   // Sort tasks by updatedAt descending (most recent first)
   const sortedTasks = [...tasks].sort((a, b) => b.updatedAt - a.updatedAt);
 
+  if (isCollapsed) {
+    return (
+      <div className="flex h-full w-12 flex-col border-r bg-card">
+        <div className="flex flex-col items-center gap-2 border-b p-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={toggleSidebar}>
+                <PanelLeft className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Expand sidebar</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={onCreateTask}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">New Task</TooltipContent>
+          </Tooltip>
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="flex flex-col items-center gap-1 p-2">
+            {sortedTasks.map((task) => (
+              <Tooltip key={task.id}>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => onSelectTask(task.id)}
+                    className={cn(
+                      'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
+                      activeTaskId === task.id
+                        ? 'bg-primary/10 text-primary'
+                        : 'hover:bg-muted'
+                    )}
+                  >
+                    <StatusDot status={task.status} size="sm" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{task.name}</TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full w-64 flex-col border-r bg-card">
-      <div className="border-b p-3">
-        <Button onClick={onCreateTask} className="w-full" size="sm">
+      <div className="flex items-center justify-between border-b p-3">
+        <Button onClick={onCreateTask} className="flex-1" size="sm">
           <Plus className="mr-2 h-4 w-4" />
           New Task
         </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="ml-2 h-8 w-8" onClick={toggleSidebar}>
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Collapse sidebar</TooltipContent>
+        </Tooltip>
       </div>
 
       <ScrollArea className="flex-1">

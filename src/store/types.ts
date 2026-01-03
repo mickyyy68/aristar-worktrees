@@ -56,6 +56,8 @@ export interface AppSettings {
   customEditorCommand?: string;
   /** Tool display settings for Agent Manager */
   toolDisplay: ToolDisplaySettings;
+  /** Whether the sidebar is collapsed */
+  sidebarCollapsed: boolean;
 }
 
 export interface StoreData {

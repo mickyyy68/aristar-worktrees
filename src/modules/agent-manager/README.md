@@ -12,6 +12,15 @@ The `agent-manager` module provides the frontend for the AI agent orchestration 
 - **Chat Interface**: Send prompts and view AI responses
 - **Tool Visualization**: Display tool calls and their results
 
+## UI Layout
+
+The Agent Manager uses a centered, constrained-width layout for the chat area:
+
+- **Collapsible Sidebar**: The task list sidebar can be collapsed/expanded using the toggle button. State is persisted in app settings.
+- **Centered Chat**: Chat area is centered with `max-w-3xl` for better readability
+- **Agent Tabs**: When multiple agents are configured, displays as larger cards showing model name and status
+- **Integrated Actions**: Agent actions (terminal, editor, accept, stop) are integrated into the chat input toolbar
+
 ## Prerequisites
 
 ### OpenCode CLI
@@ -596,16 +605,41 @@ import { ChatMessage } from '@agent-manager/components/chat';
 
 ### `ChatInput`
 
-Message input with send button.
+Message input with send button and integrated agent actions.
 
 ```typescript
 import { ChatInput } from '@agent-manager/components/chat';
 
 <ChatInput
-  onSend={(prompt) => sendMessage(prompt)}
+  onSend={(prompt, sendToAll) => sendMessage(prompt, sendToAll)}
   disabled={isProcessing}
+  agent={activeAgent}
+  agentCount={agents.length}
+  onAccept={handleAcceptAgent}
+  onStop={handleStopAgent}
+  onOpenTerminal={handleOpenTerminal}
+  onOpenEditor={handleOpenEditor}
+  onRevealInFinder={handleRevealInFinder}
+  onRemove={handleRemoveAgent}
 />
 ```
+
+**Props:**
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `onSend` | `(message, sendToAll) => void` | Called when message is sent |
+| `isLoading` | `boolean` | Disables input while processing |
+| `disabled` | `boolean` | Disables the input |
+| `placeholder` | `string` | Placeholder text |
+| `agentCount` | `number` | Number of agents (shows "send to all" toggle if > 1) |
+| `agent` | `TaskAgent` | Current agent (for displaying model info) |
+| `onAccept` | `() => void` | Accept agent callback |
+| `onStop` | `() => void` | Stop agent callback |
+| `onOpenTerminal` | `() => void` | Open terminal callback |
+| `onOpenEditor` | `() => void` | Open editor callback |
+| `onRevealInFinder` | `() => void` | Reveal in Finder callback |
+| `onRemove` | `() => void` | Remove agent callback |
 
 ### `ToolCallDisplay`
 
