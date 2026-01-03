@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Users, MoreHorizontal, Star, StopCircle, Terminal, Code, FolderOpen, Trash2 } from 'lucide-react';
+import { Send, Users, Star, StopCircle, Terminal, Code, FolderOpen, Trash2, Sparkles } from 'lucide-react';
 import { Button } from '@core/ui/button';
 import { Textarea } from '@core/ui/textarea';
-import { Label } from '@core/ui/label';
 import { Switch } from '@core/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@core/ui/tooltip';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@core/ui/dropdown-menu';
 import { cn } from '@core/lib/utils';
 import type { TaskAgent } from '../../store/types';
 
@@ -42,7 +40,6 @@ export function ChatInput({
   const [sendToAll, setSendToAll] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-resize textarea
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
@@ -66,11 +63,8 @@ export function ChatInput({
     }
   };
 
-  const showAgentActions = agent && (onAccept || onStop || onOpenTerminal || onOpenEditor);
-
   return (
-    <div className="rounded-lg border bg-card/50 p-3">
-      {/* Textarea input */}
+    <div className="rounded-xl border bg-card/50 p-3 transition-colors duration-200 focus-within:border-primary/30 focus-within:bg-card/70">
       <Textarea
         ref={textareaRef}
         value={message}
@@ -78,50 +72,40 @@ export function ChatInput({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled || isLoading}
-        className="min-h-[40px] max-h-[200px] resize-none border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+        className="min-h-[36px] max-h-[200px] resize-none border-0 bg-transparent px-1 py-2 text-sm leading-relaxed shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
         rows={1}
       />
 
-      {/* Bottom toolbar */}
-      <div className="mt-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {/* Agent selector dropdown (placeholder for agent type) */}
+      <div className="mt-2 flex items-center justify-between border-t border-border/50 pt-2">
+        <div className="flex items-center gap-1">
           {agent && (
-            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-muted-foreground">
-              <span className="opacity-70">Agent</span>
-              <span className="font-medium text-foreground">{agent.agentType || 'Agent'}</span>
-            </Button>
+            <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-md bg-muted/60 text-xs text-muted-foreground select-none">
+              <Sparkles className="h-3 w-3" />
+              <span className="font-medium">{agent.agentType || 'Agent'}</span>
+              <span className="text-muted-foreground/70">·</span>
+              <span className="font-mono text-[10px]">{agent.modelId}</span>
+            </div>
           )}
 
-          {/* Model indicator */}
-          {agent && (
-            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-muted-foreground">
-              {agent.modelId}
-            </Button>
-          )}
-
-          {/* Send to all toggle - only show if there are multiple agents */}
           {agentCount > 1 && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 ml-2">
               <Switch
                 id="send-to-all"
                 checked={sendToAll}
                 onCheckedChange={setSendToAll}
                 disabled={disabled || isLoading}
-                className="scale-75"
               />
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Label
-                    htmlFor="send-to-all"
+                  <div
                     className={cn(
-                      'flex cursor-pointer items-center gap-1 text-xs',
-                      sendToAll ? 'text-foreground' : 'text-muted-foreground'
+                      'flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs transition-colors select-none',
+                      sendToAll ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                     )}
                   >
                     <Users className="h-3 w-3" />
-                    All
-                  </Label>
+                    <span>All</span>
+                  </div>
                 </TooltipTrigger>
                 <TooltipContent side="top">
                   Send message to all agents simultaneously
@@ -131,65 +115,81 @@ export function ChatInput({
           )}
         </div>
 
-        <div className="flex items-center gap-1">
-          {/* Agent actions menu */}
-          {showAgentActions && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <MoreHorizontal className="h-4 w-4" />
+        <div className="flex items-center gap-0.5">
+          {onOpenTerminal && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={onOpenTerminal}>
+                  <Terminal className="h-3.5 w-3.5" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {onOpenTerminal && (
-                  <DropdownMenuItem onClick={onOpenTerminal}>
-                    <Terminal className="mr-2 h-4 w-4" />
-                    Open in Terminal
-                  </DropdownMenuItem>
-                )}
-                {onOpenEditor && (
-                  <DropdownMenuItem onClick={onOpenEditor}>
-                    <Code className="mr-2 h-4 w-4" />
-                    Open in Editor
-                  </DropdownMenuItem>
-                )}
-                {onRevealInFinder && (
-                  <DropdownMenuItem onClick={onRevealInFinder}>
-                    <FolderOpen className="mr-2 h-4 w-4" />
-                    Reveal in Finder
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                {onAccept && !agent?.accepted && (
-                  <DropdownMenuItem onClick={onAccept}>
-                    <Star className="mr-2 h-4 w-4" />
-                    Accept Agent
-                  </DropdownMenuItem>
-                )}
-                {onStop && agent?.status === 'running' && (
-                  <DropdownMenuItem onClick={onStop} className="text-destructive">
-                    <StopCircle className="mr-2 h-4 w-4" />
-                    Stop Agent
-                  </DropdownMenuItem>
-                )}
-                {onRemove && (
-                  <DropdownMenuItem onClick={onRemove} className="text-destructive">
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Remove Agent
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </TooltipTrigger>
+              <TooltipContent side="top">Open in Terminal</TooltipContent>
+            </Tooltip>
+          )}
+          {onOpenEditor && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={onOpenEditor}>
+                  <Code className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Open in Editor</TooltipContent>
+            </Tooltip>
+          )}
+          {onRevealInFinder && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={onRevealInFinder}>
+                  <FolderOpen className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Reveal in Finder</TooltipContent>
+            </Tooltip>
+          )}
+          {onAccept && agent && !agent.accepted && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-500/80 hover:text-amber-500 hover:bg-amber-500/10" onClick={onAccept}>
+                  <Star className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Accept Agent</TooltipContent>
+            </Tooltip>
+          )}
+          {onStop && agent?.status === 'running' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/80 hover:text-destructive hover:bg-destructive/10" onClick={onStop}>
+                  <StopCircle className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Stop Agent</TooltipContent>
+            </Tooltip>
+          )}
+          {onRemove && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground/80 hover:text-destructive hover:bg-destructive/10" onClick={onRemove}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Remove Agent</TooltipContent>
+            </Tooltip>
           )}
 
-          {/* Send button */}
+          <div className="w-px h-5 bg-border/60 mx-1" />
+
           <Button
             onClick={handleSend}
             disabled={disabled || isLoading || !message.trim()}
-            size="icon"
-            className="h-7 w-7"
+            size="sm"
+            className={cn(
+              "h-8 px-3 gap-1.5 transition-all duration-200",
+              !message.trim() ? "opacity-50" : ""
+            )}
           >
             <Send className="h-3.5 w-3.5" />
+            <span className="text-xs font-medium">Send</span>
           </Button>
         </div>
       </div>

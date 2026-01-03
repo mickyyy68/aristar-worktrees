@@ -17,7 +17,7 @@ export function ToolsSection({ toolCalls }: ToolsSectionProps) {
   const { toolDisplay } = settings;
 
   const [isSectionExpanded, setIsSectionExpanded] = useState(true);
-  const [allToolsExpanded, setAllToolsExpanded] = useState(toolDisplay?.expandToolsByDefault ?? false);
+  const allToolsExpanded = toolDisplay?.expandToolsByDefault ?? false;
 
   // Calculate completion status
   const stats = useMemo(() => {
@@ -34,10 +34,6 @@ export function ToolsSection({ toolCalls }: ToolsSectionProps) {
   if (toolCalls.length === 0) {
     return null;
   }
-
-  const toggleAllTools = () => {
-    setAllToolsExpanded(!allToolsExpanded);
-  };
 
   const getStatusText = () => {
     if (stats.running > 0) {
@@ -69,14 +65,7 @@ export function ToolsSection({ toolCalls }: ToolsSectionProps) {
           </span>
         </button>
 
-        {isSectionExpanded && (
-          <button
-            onClick={toggleAllTools}
-            className="text-xs text-primary hover:underline"
-          >
-            {allToolsExpanded ? 'Collapse All' : 'Expand All'}
-          </button>
-        )}
+
       </div>
 
       {/* Tool list */}

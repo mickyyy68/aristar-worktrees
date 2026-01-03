@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Loader2, Plus, X, Search, Check } from 'lucide-react';
 import { Button } from '@core/ui/button';
 import { Input } from '@core/ui/input';
@@ -48,6 +48,8 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     loadProviders,
     loadAvailableAgents,
   } = useAgentManagerStore();
+  
+  const modelSearchInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -55,13 +57,12 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
   const [selectedBranch, setSelectedBranch] = useState('');
   const [selectedCommit, setSelectedCommit] = useState<CommitInfo | null>(null);
   const [selectedModels, setSelectedModels] = useState<ModelSelection[]>([]);
-  const [agentType, setAgentType] = useState('');
+  const [agentType, setAgentType] = useState('build');
   const [loading, setLoading] = useState(false);
   const [loadingProviders, setLoadingProviders] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Search states
-  const [agentSearch, setAgentSearch] = useState('');
+  // Search state for models
   const [modelSearch, setModelSearch] = useState('');
   const [modelPopoverOpen, setModelPopoverOpen] = useState(false);
 
@@ -77,12 +78,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
       opencodeClient.connect(port);
 
       await loadProviders(port);
-      const agents = await loadAvailableAgents(port);
-
-      if (agents.length > 0 && !agentType) {
-        const defaultAgent = agents.find(a => a.id === 'coder') || agents[0];
-        setAgentType(defaultAgent.id);
-      }
+      await loadAvailableAgents(port);
     } catch (err) {
       console.error('Failed to load OpenCode data:', err);
       const errorMsg = String(err);
@@ -94,7 +90,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     } finally {
       setLoadingProviders(false);
     }
-  }, [selectedRepo, loadProviders, loadAvailableAgents, agentType]);
+  }, [selectedRepo, loadProviders, loadAvailableAgents]);
 
   useEffect(() => {
     if (open && selectedRepo) {
@@ -111,9 +107,8 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
       setSelectedBranch('');
       setSelectedCommit(null);
       setSelectedModels([]);
-      setAgentType('');
+      setAgentType('build');
       setError(null);
-      setAgentSearch('');
       setModelSearch('');
     }
   }, [open]);
@@ -211,18 +206,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     );
   }, [availableModels, modelSearch]);
 
-  // Filter agents by search
-  const filteredAgents = useMemo(() => {
-    if (!agentSearch.trim()) return availableAgents;
-    const search = agentSearch.toLowerCase();
-    return availableAgents.filter(a => 
-      a.id.toLowerCase().includes(search) ||
-      a.name.toLowerCase().includes(search) ||
-      a.description.toLowerCase().includes(search)
-    );
-  }, [availableAgents, agentSearch]);
 
-  const selectedAgentName = availableAgents.find(a => a.id === agentType)?.name || agentType;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -280,79 +264,25 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
             />
           )}
 
-          {/* Agent type with search */}
+          {/* Agent type selector */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Agent Type</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  className="h-9 w-full justify-between font-normal"
-                  disabled={loadingProviders}
-                >
-                  {loadingProviders ? (
-                    <span className="flex items-center gap-2 text-muted-foreground">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Loading...
-                    </span>
-                  ) : agentType ? (
-                    selectedAgentName
-                  ) : (
-                    <span className="text-muted-foreground">Select agent type</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[300px] p-0" align="start">
-                <div className="p-2">
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      placeholder="Search agents..."
-                      value={agentSearch}
-                      onChange={(e) => setAgentSearch(e.target.value)}
-                      className="h-8 pl-8 text-sm"
-                    />
-                  </div>
-                </div>
-                <ScrollArea className="h-[200px]">
-                  <div className="p-1">
-                    {filteredAgents.length === 0 ? (
-                      <div className="py-4 text-center text-xs text-muted-foreground">
-                        No agents found
-                      </div>
-                    ) : (
-                      filteredAgents.map((agent) => (
-                        <button
-                          key={agent.id}
-                          type="button"
-                          onClick={() => {
-                            setAgentType(agent.id);
-                            setAgentSearch('');
-                          }}
-                          className={cn(
-                            'flex w-full items-start gap-2 rounded px-2 py-1.5 text-left transition-colors',
-                            agentType === agent.id ? 'bg-primary/10' : 'hover:bg-muted/50'
-                          )}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">{agent.name}</span>
-                              {agentType === agent.id && (
-                                <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-primary" />
-                              )}
-                            </div>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {agent.description}
-                            </p>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </ScrollArea>
-              </PopoverContent>
-            </Popover>
+            <Select value={agentType} onValueChange={setAgentType} disabled={loadingProviders}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Select agent type" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableAgents.length === 0 ? (
+                  <SelectItem value="build">Build</SelectItem>
+                ) : (
+                  availableAgents.map((agent) => (
+                    <SelectItem key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Models with search */}
@@ -390,11 +320,22 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                     Add model
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[320px] p-0" align="start">
+                <PopoverContent 
+                  className="w-[320px] p-0" 
+                  align="start" 
+                  onWheel={(e) => e.stopPropagation()}
+                  onOpenAutoFocus={(e) => {
+                    e.preventDefault();
+                    setTimeout(() => {
+                      modelSearchInputRef.current?.focus();
+                    }, 0);
+                  }}
+                >
                   <div className="p-2">
                     <div className="relative">
                       <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                       <Input
+                        ref={modelSearchInputRef}
                         placeholder="Search models..."
                         value={modelSearch}
                         onChange={(e) => setModelSearch(e.target.value)}
@@ -402,7 +343,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                       />
                     </div>
                   </div>
-                  <ScrollArea className="h-[240px]">
+                  <ScrollArea className="h-[240px]" type="always">
                     <div className="p-1">
                       {filteredModels.length === 0 ? (
                         <div className="py-4 text-center text-xs text-muted-foreground">

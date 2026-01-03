@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Check, ChevronDown, Search, Loader2 } from 'lucide-react';
 import { Button, Input, ScrollArea } from '@core/ui';
 import {
@@ -27,6 +27,7 @@ export function AgentTypeSelector({
   const selectedValue = typeof value === 'string' ? value : '';
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const filteredAgents = useMemo(() => {
     if (!search.trim()) return agents;
@@ -71,6 +72,7 @@ export function AgentTypeSelector({
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               placeholder="Search agents..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -105,6 +107,7 @@ export function AgentTypeSelector({
                             e.stopPropagation();
                             onChange(agent.id);
                             setOpen(false);
+                            searchInputRef.current?.focus();
                           }}
                           className={cn(
                             'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',

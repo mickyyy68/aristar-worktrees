@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Check, ChevronDown, Search, Loader2 } from 'lucide-react';
 import { Button } from '@core/ui/button';
 import { Input } from '@core/ui/input';
@@ -28,6 +28,7 @@ export function ModelSelector({
 }: ModelSelectorProps) {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Filter providers/models based on search
   const filteredProviders = useMemo(() => {
@@ -62,6 +63,7 @@ export function ModelSelector({
     } else {
       onChange([...selectedModels, { providerId, modelId }]);
     }
+    searchInputRef.current?.focus();
   };
 
   const getSelectedLabel = () => {
@@ -101,6 +103,7 @@ export function ModelSelector({
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               placeholder="Search models..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
