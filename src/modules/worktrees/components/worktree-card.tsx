@@ -13,7 +13,6 @@ import {
   Edit2,
   Trash2,
   FileCode,
-  Bot,
 } from 'lucide-react';
 import { Button } from '@core/ui/button';
 import { Card, CardContent } from '@core/ui/card';
@@ -45,7 +44,7 @@ export function WorktreeCard({
   onLock,
   onUnlock,
 }: WorktreeCardProps) {
-  const { openInTerminal, openInEditor, revealInFinder, copyToClipboard, opencode } = useAppStore();
+  const { openInTerminal, openInEditor, revealInFinder, copyToClipboard } = useAppStore();
   const [copied, setCopied] = useState(false);
   
   // Get branch-based color styling
@@ -56,10 +55,6 @@ export function WorktreeCard({
     await copyToClipboard(worktree.path);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleOpenCode = () => {
-    opencode.openOpencodePanel(worktree.path);
   };
 
   return (
@@ -131,13 +126,6 @@ export function WorktreeCard({
               </DropdownMenuItem>
               
               <DropdownMenuSeparator />
-
-              <DropdownMenuItem onClick={handleOpenCode}>
-                <Bot className="mr-2 h-4 w-4" />
-                OpenCode AI
-              </DropdownMenuItem>
-
-              <DropdownMenuSeparator />
               
               {worktree.startupScript && (
                 <DropdownMenuItem>
@@ -180,7 +168,7 @@ export function WorktreeCard({
           </DropdownMenu>
         </div>
 
-        <div className="mt-4 grid grid-cols-4 gap-2">
+        <div className="mt-4 grid grid-cols-3 gap-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -207,20 +195,6 @@ export function WorktreeCard({
               </Button>
             </TooltipTrigger>
             <TooltipContent>Open editor in worktree</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleOpenCode}
-              >
-                <Bot className="mr-2 h-3.5 w-3.5" />
-                AI
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Open OpenCode AI assistant</TooltipContent>
           </Tooltip>
 
           <Tooltip>

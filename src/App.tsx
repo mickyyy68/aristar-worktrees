@@ -8,7 +8,6 @@ import { useAgentManagerStore } from '@agent-manager/store';
 import { Header } from '@core/components';
 import { RepositorySidebar, WorktreeCard, CreateWorktreeDialog, RenameDialog } from '@worktrees/components';
 import { isProtectedBranch } from '@worktrees/lib';
-import { OpenCodePanel } from '@agent-manager/components/opencode-panel';
 import { AgentManagerView } from '@agent-manager/components';
 import type { WorktreeMetadata } from '@/store/types';
 
@@ -300,8 +299,6 @@ function App() {
         </div>
       )}
 
-      <OpenCodePanel />
-      
       {/* Toast notifications */}
       <Toaster 
         position="bottom-right" 

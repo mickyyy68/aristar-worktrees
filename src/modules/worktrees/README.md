@@ -276,7 +276,6 @@ Each `WorktreeCard` provides quick actions that call store methods:
 |--------|--------|-------------|
 | Terminal | `openInTerminal(path)` | Opens worktree in configured terminal |
 | Editor | `openInEditor(path)` | Opens worktree in configured editor |
-| AI | `opencode.openOpencodePanel(path)` | Opens OpenCode AI panel |
 | Reveal | `revealInFinder(path)` | Shows worktree in Finder |
 | Copy | `copyToClipboard(path)` | Copies path to clipboard |
 

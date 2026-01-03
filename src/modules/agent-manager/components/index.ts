@@ -15,7 +15,6 @@ export { AgentActions, AgentToolbarActions } from './agent-actions';
 export { AgentTypeSelector } from './agent-type-selector';
 export { CreateTaskDialog } from './create-task-dialog';
 export { ModelSelector } from './model-selector';
-export { OpenCodePanel } from './opencode-panel';
 export { SourceSelector } from './source-selector';
 export { StatusBadge } from './status-badge';
 export { TaskEmptyState } from './task-empty-state';

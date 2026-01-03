@@ -292,6 +292,9 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
           }
           setAgentLoading(agentId, false);
           console.log('[SSE] session.status - set loading false');
+          
+          // Mark agent as idle (completed processing)
+          useAgentManagerStore.getState().markAgentIdle(agentId);
         }
         break;
       }
@@ -314,6 +317,9 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
         }
         setAgentLoading(agentId, false);
         console.log('[SSE] session.idle - set loading false');
+        
+        // Mark agent as idle (completed processing)
+        useAgentManagerStore.getState().markAgentIdle(agentId);
         break;
       }
 

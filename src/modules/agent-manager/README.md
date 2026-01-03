@@ -35,7 +35,6 @@ agent-manager/
 │   │   ├── tools-section.tsx     # Tool grouping wrapper
 │   │   ├── tool-config.ts        # Tool icons/colors config
 │   │   └── index.ts
-│   ├── opencode-panel.tsx      # Main panel container
 │   ├── agent-manager-view.tsx  # Task/agent view
 │   ├── task-list-sidebar.tsx   # Task list
 │   ├── create-task-dialog.tsx  # New task dialog
@@ -57,7 +56,7 @@ agent-manager/
 
 ```typescript
 // Components
-import { OpenCodePanel, ChatView, ChatMessage } from '@agent-manager/components';
+import { ChatView, ChatMessage } from '@agent-manager/components';
 import { ToolCallDisplay, ToolsSection } from '@agent-manager/components/tools';
 import { AgentManagerView, CreateTaskDialog } from '@agent-manager/components';
 
@@ -234,13 +233,15 @@ function TaskList() {
 
 | Action | Description |
 |--------|-------------|
-| `loadTasks()` | Load tasks from backend |
+| `loadTasks()` | Load tasks from backend (resets stale "running" statuses on app startup) |
 | `selectTask(id)` | Select a task |
 | `createTask(params)` | Create new task with agents |
 | `deleteTask(id, deleteWorktrees)` | Delete task |
 | `addAgentToTask(taskId, model)` | Add agent to task |
 | `removeAgent(taskId, agentId)` | Remove agent |
 | `acceptAgent(taskId, agentId)` | Mark agent as winner |
+| `markAgentIdle(agentId)` | Transition agent from "running" to "idle" when AI finishes |
+| `updateTaskStatusFromAgents(taskId)` | Update task status based on aggregate agent statuses |
 
 ## Types
 
@@ -312,16 +313,6 @@ interface ToolInvocationPart {
 ```
 
 ## Components
-
-### `OpenCodePanel`
-
-Main entry point for the agent manager UI. Can be opened for a specific worktree.
-
-```typescript
-import { OpenCodePanel } from '@agent-manager/components';
-
-<OpenCodePanel />
-```
 
 ### `ChatView`
 
