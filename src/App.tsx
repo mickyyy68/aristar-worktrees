@@ -46,14 +46,12 @@ function App() {
       
       // If we already have providers cached, skip loading
       if (providers.length > 0) {
-        console.log('[App] OpenCode providers already loaded, skipping');
         return;
       }
       
       // Find a repository to use for loading OpenCode data
       const repo = repositories.find(r => r.id === selectedRepositoryId) || repositories[0];
       if (repo) {
-        console.log('[App] Loading OpenCode providers and agents...');
         await refreshOpenCodeData(repo.path);
       }
     };

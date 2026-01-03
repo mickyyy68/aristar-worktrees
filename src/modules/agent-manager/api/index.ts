@@ -1,6 +1,6 @@
 // Agent Manager API
 
-export { opencodeClient } from './opencode';
+export { opencodeClient, opencodeClientManager } from './opencode';
 export type {
   OpenCodeMessage,
   OpenCodeSession,

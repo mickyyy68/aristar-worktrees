@@ -65,6 +65,10 @@ fn main() {
             // Worktree validation commands
             agent_manager::commands::validate_task_worktrees,
             agent_manager::commands::recreate_agent_worktree,
+            // Logger commands
+            core::commands::get_log_file_path,
+            core::commands::append_to_log_file,
+            core::commands::rotate_logs_if_needed,
         ])
         .setup(|_app| {
             println!("[main] App setup completed");

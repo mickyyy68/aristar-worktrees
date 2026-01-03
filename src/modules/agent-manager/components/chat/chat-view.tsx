@@ -3,6 +3,7 @@ import { ScrollArea } from '@core/ui/scroll-area';
 import { ChatMessage, ChatMessageLoading } from './chat-message';
 import type { OpenCodeMessage } from '../../api/opencode';
 import type { MessagePart } from '../../store/types';
+import { logger } from '@core/lib';
 
 interface ChatViewProps {
   messages: OpenCodeMessage[];
@@ -57,15 +58,32 @@ function consolidateMessages(messages: OpenCodeMessage[]): MessageWithParts[] {
 export function ChatView({ messages, isLoading = false }: ChatViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  console.log('[ChatView] Received messages:', messages.length, 'first few:', messages.slice(0, 3).map(m => ({ id: m.id, role: m.role, contentLength: m.content?.length })));
+  logger.debug('[ChatView]', 'Received messages', { count: messages.length, firstFew: messages.slice(0, 3).map(m => ({ id: m.id, role: m.role, contentLength: m.content?.length })) });
 
-  // Consolidate consecutive assistant messages
-  const consolidatedMessages = useMemo(
-    () => consolidateMessages(messages),
+  // Filter out assistant messages with no content - they're still loading/streaming
+  // and will be shown once content arrives via SSE
+  const messagesWithContent = useMemo(
+    () => messages.filter(m => {
+      // Always show user messages
+      if (m.role === 'user') return true;
+      // Only show assistant messages that have content or parts with tools
+      const hasContent = m.content && m.content.trim().length > 0;
+      const msgWithParts = m as MessageWithParts;
+      const hasToolParts = msgWithParts.parts?.some(p => p.type === 'tool-invocation');
+      return hasContent || hasToolParts;
+    }),
     [messages]
   );
   
-  console.log('[ChatView] After consolidation:', consolidatedMessages.length);
+  logger.debug('[ChatView]', 'After filtering empty', { count: messagesWithContent.length });
+
+  // Consolidate consecutive assistant messages
+  const consolidatedMessages = useMemo(
+    () => consolidateMessages(messagesWithContent),
+    [messagesWithContent]
+  );
+  
+  logger.debug('[ChatView]', 'After consolidation', { count: consolidatedMessages.length });
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

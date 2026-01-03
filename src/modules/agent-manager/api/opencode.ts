@@ -77,13 +77,11 @@ class OpenCodeClient {
 
   connect(port: number): void {
     this.baseUrl = `http://127.0.0.1:${port}`;
-    console.log('[OpenCodeClient] Connected to', this.baseUrl);
   }
 
   disconnect(): void {
     this.baseUrl = null;
     this.currentSessionId = null;
-    console.log('[OpenCodeClient] Disconnected');
   }
 
   isConnected(): boolean {
@@ -312,10 +310,8 @@ class OpenCodeClient {
     for (let i = 0; i < maxRetries; i++) {
       try {
         await this.healthCheck();
-        console.log('[OpenCodeClient] Server is ready');
         return true;
       } catch {
-        console.log(`[OpenCodeClient] Waiting for server... (${i + 1}/${maxRetries})`);
         await new Promise((r) => setTimeout(r, delayMs));
       }
     }
@@ -339,7 +335,6 @@ class OpenCodeClient {
     }
 
     const data = await response.json();
-    console.log('[OpenCodeClient] getProviders raw response:', JSON.stringify(data, null, 2));
 
     // The /provider endpoint returns { all: Provider[], default: {...}, connected: string[] }
     const rawProviders = data.all || data.providers || [];
@@ -372,8 +367,6 @@ class OpenCodeClient {
         models,
       };
     });
-
-    console.log('[OpenCodeClient] Transformed providers:', providers.length, 'providers');
 
     return {
       providers,
@@ -413,17 +406,12 @@ class OpenCodeClient {
     }
 
     const data = await response.json();
-    console.log('[OpenCodeClient] getAgents raw response:', JSON.stringify(data, null, 2));
 
     const agents = data.map((a: any) => {
       const id = a.id;
       const name = a.name || a.id || 'Unknown';
       const description = a.description || '';
       const mode = a.mode || 'all';
-
-      if (!id) {
-        console.debug('[OpenCodeClient] Agent missing id, using name as fallback:', { name, id });
-      }
 
       return {
         id: id || name,
@@ -432,8 +420,6 @@ class OpenCodeClient {
         mode,
       };
     });
-
-    console.log('[OpenCodeClient] Transformed agents:', agents.length, 'agents');
 
     return agents;
   }
@@ -528,8 +514,6 @@ class OpenCodeClient {
       body.agent = options.agent;
     }
 
-    console.log('[OpenCodeClient] sendPromptAsync body:', JSON.stringify(body, null, 2));
-
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -594,10 +578,13 @@ class OpenCodeClient {
    */
   async getSessionMessagesExtended(): Promise<OpenCodeMessageExtended[]> {
     if (!this.currentSessionId) {
+      console.log('[getSessionMessagesExtended] No current session ID');
       return [];
     }
 
     const url = `${this.getBaseUrl()}/session/${this.currentSessionId}/message`;
+    console.log('[getSessionMessagesExtended] Fetching from:', url);
+    
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -605,18 +592,218 @@ class OpenCodeClient {
     }
 
     const data = await response.json();
-    return data.map((m: any) => ({
-      id: m.info.id,
-      role: m.info.role,
-      content: m.parts
-        .filter((p: any) => p.type === 'text')
-        .map((p: any) => p.text)
-        .join('\n'),
-      // Handle multiple timestamp formats: time.created (nested), created (legacy), createdAt (alternative)
-      timestamp: new Date(m.info.time?.created || m.info.created || m.info.createdAt || Date.now()),
-      parts: m.parts,
-    }));
+    console.log('[getSessionMessagesExtended] Raw API response:', JSON.stringify(data, null, 2));
+    
+    // Handle case where data is null, undefined, or not an array
+    if (!Array.isArray(data)) {
+      console.log('[getSessionMessagesExtended] Data is not an array:', typeof data);
+      return [];
+    }
+    
+    return data.map((m: any) => {
+      const parts = m.parts || [];
+      
+      console.log('[getSessionMessagesExtended] Processing message:', {
+        id: m.info?.id,
+        role: m.info?.role,
+        partsCount: parts.length,
+        partTypes: parts.map((p: any) => p.type),
+        allParts: parts
+      });
+      
+      // Filter for text parts and extract content
+      const textParts = parts.filter((p: any) => p.type === 'text');
+      const textContent = textParts.map((p: any) => p.text || '').filter(Boolean).join('\n');
+      
+      console.log('[getSessionMessagesExtended] Text extraction:', {
+        textPartsCount: textParts.length,
+        textContent: textContent.substring(0, 100) + (textContent.length > 100 ? '...' : ''),
+        textContentLength: textContent.length
+      });
+      
+      return {
+        id: m.info.id,
+        role: m.info.role,
+        content: textContent,
+        // Handle multiple timestamp formats: time.created (nested), created (legacy), createdAt (alternative)
+        timestamp: new Date(m.info.time?.created || m.info.created || m.info.createdAt || Date.now()),
+        parts: parts,
+      };
+    });
   }
 }
 
+/**
+ * Manager for per-agent OpenCode clients.
+ * Each agent gets its own client instance to avoid connection conflicts
+ * when switching between agents or using multiple agents simultaneously.
+ */
+class OpenCodeClientManager {
+  private clients = new Map<string, OpenCodeClient>();
+
+  /**
+   * Get or create a client for a specific agent
+   * @param agentKey - Composite key in format "taskId:agentId"
+   * @param port - Port to connect to (optional, will connect if provided)
+   */
+  getClient(agentKey: string, port?: number): OpenCodeClient {
+    let client = this.clients.get(agentKey);
+    
+    if (!client) {
+      client = new OpenCodeClient();
+      this.clients.set(agentKey, client);
+    }
+    
+    if (port !== undefined && !client.isConnected()) {
+      client.connect(port);
+    }
+    
+    return client;
+  }
+
+  /**
+   * Get a client only if it already exists
+   */
+  getExistingClient(agentKey: string): OpenCodeClient | undefined {
+    return this.clients.get(agentKey);
+  }
+
+  /**
+   * Remove a client for an agent (cleanup on agent removal)
+   */
+  removeClient(agentKey: string): void {
+    const client = this.clients.get(agentKey);
+    if (client) {
+      client.disconnect();
+      this.clients.delete(agentKey);
+    }
+  }
+
+  /**
+   * Check if a client exists and is connected for an agent
+   */
+  isConnected(agentKey: string): boolean {
+    const client = this.clients.get(agentKey);
+    return client?.isConnected() ?? false;
+  }
+
+  /**
+   * Disconnect all clients (cleanup)
+   */
+  disconnectAll(): void {
+    for (const client of this.clients.values()) {
+      client.disconnect();
+    }
+    this.clients.clear();
+  }
+
+  // Track active SSE subscriptions per agent
+  private sseSubscriptions = new Map<string, () => void>();
+  // Track if SSE is connected per agent
+  private sseConnected = new Map<string, boolean>();
+  // Event handlers per agent (for the React hook to use)
+  private eventHandlers = new Map<string, (event: any) => void>();
+
+  /**
+   * Establish SSE connection for an agent and wait for server.connected event.
+   * This should be called BEFORE sending any prompts to ensure events aren't missed.
+   * 
+   * @param agentKey - Composite key in format "taskId:agentId"
+   * @param port - Port to connect to
+   * @param timeoutMs - Maximum time to wait for connection (default: 5000ms)
+   * @returns Promise that resolves when connected, or rejects on timeout/error
+   */
+  async establishSSEConnection(agentKey: string, port: number, timeoutMs = 5000): Promise<void> {
+    // If already connected, return immediately
+    if (this.sseConnected.get(agentKey)) {
+      console.log(`[OpenCodeClientManager] SSE already connected for ${agentKey}`);
+      return;
+    }
+
+    // Clean up any existing subscription for this agent
+    const existingUnsub = this.sseSubscriptions.get(agentKey);
+    if (existingUnsub) {
+      existingUnsub();
+      this.sseSubscriptions.delete(agentKey);
+    }
+
+    const client = this.getClient(agentKey, port);
+
+    return new Promise((resolve, reject) => {
+      let resolved = false;
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          reject(new Error(`SSE connection timeout for ${agentKey}`));
+        }
+      }, timeoutMs);
+
+      const unsub = client.subscribeToEvents((event) => {
+        // Handle the server.connected event
+        if (event.type === 'server.connected' && !resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          this.sseConnected.set(agentKey, true);
+          console.log(`[OpenCodeClientManager] SSE connected for ${agentKey}`);
+          resolve();
+        }
+
+        // Forward all events to the registered handler (if any)
+        const handler = this.eventHandlers.get(agentKey);
+        if (handler) {
+          handler(event);
+        }
+      });
+
+      this.sseSubscriptions.set(agentKey, unsub);
+    });
+  }
+
+  /**
+   * Register an event handler for an agent's SSE events.
+   * Used by the useAgentSSE hook to receive events.
+   * If SSE is already connected, the handler will receive future events.
+   * 
+   * @param agentKey - Composite key in format "taskId:agentId"
+   * @param handler - Function to call for each event
+   * @returns Unsubscribe function
+   */
+  registerEventHandler(agentKey: string, handler: (event: any) => void): () => void {
+    this.eventHandlers.set(agentKey, handler);
+    console.log(`[OpenCodeClientManager] Event handler registered for ${agentKey}`);
+    
+    return () => {
+      if (this.eventHandlers.get(agentKey) === handler) {
+        this.eventHandlers.delete(agentKey);
+        console.log(`[OpenCodeClientManager] Event handler unregistered for ${agentKey}`);
+      }
+    };
+  }
+
+  /**
+   * Check if SSE is connected for an agent
+   */
+  isSSEConnected(agentKey: string): boolean {
+    return this.sseConnected.get(agentKey) ?? false;
+  }
+
+  /**
+   * Clean up SSE subscription for an agent
+   */
+  cleanupSSE(agentKey: string): void {
+    const unsub = this.sseSubscriptions.get(agentKey);
+    if (unsub) {
+      unsub();
+      this.sseSubscriptions.delete(agentKey);
+    }
+    this.sseConnected.delete(agentKey);
+    this.eventHandlers.delete(agentKey);
+    console.log(`[OpenCodeClientManager] SSE cleaned up for ${agentKey}`);
+  }
+}
+
+// Legacy singleton client (for backward compatibility with code that doesn't need per-agent isolation)
 export const opencodeClient = new OpenCodeClient();
+
+// Per-agent client manager (for SSE subscriptions that need isolation)
+export const opencodeClientManager = new OpenCodeClientManager();

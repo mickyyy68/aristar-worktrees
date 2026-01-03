@@ -5,6 +5,7 @@
 //! - Shared types (AppSettings)
 //! - System operations (clipboard, finder)
 
+pub mod commands;
 pub mod persistence;
 pub mod system;
 pub mod types;

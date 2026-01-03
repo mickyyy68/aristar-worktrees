@@ -13,6 +13,7 @@ import { useAgentManagerStore } from '../store/agent-manager-store';
 import { useAppStore } from '@/store/use-app-store';
 import { useAgentSSE } from '../api/use-agent-sse';
 import type { Task } from '../store/types';
+import { logger } from '@core/lib';
 
 export function AgentManagerView() {
   const {
@@ -104,7 +105,7 @@ export function AgentManagerView() {
     agentSessionId
   );
 
-  console.log('[AgentManagerView] Render:', {
+  logger.debug('[AgentManagerView]', 'Render', {
     activeTaskId,
     activeAgentId,
     agentKey,

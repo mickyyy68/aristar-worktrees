@@ -92,9 +92,7 @@ export const useAppStore = create<AppState>()(
       addRepository: async (path) => {
         set({ isLoading: true, error: null });
         try {
-          console.log('[addRepository] Calling add_repository with path:', path);
           const repo = await commands.addRepository(path);
-          console.log('[addRepository] Success:', repo);
           set((state) => ({
             repositories: [...state.repositories, repo],
             isLoading: false,
