@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef } from 'react';
-import { Check, ChevronDown, Search, Loader2 } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { Check, ChevronDown, Search, X, Loader2 } from 'lucide-react';
 import { Button, Input, ScrollArea } from '@core/ui';
 import {
   DropdownMenu,
@@ -29,6 +29,12 @@ export function AgentTypeSelector({
   const [open, setOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (open) {
+      searchInputRef.current?.focus();
+    }
+  }, [open]);
+
   const filteredAgents = useMemo(() => {
     if (!search.trim()) return agents;
     const query = search.toLowerCase();
@@ -44,6 +50,18 @@ export function AgentTypeSelector({
     if (!selectedValue) return 'Select agent type...';
     const selected = agents.find((a) => a.id === selectedValue);
     return selected?.name || selectedValue;
+  };
+
+  const handleSelect = (agentId: string) => {
+    onChange(agentId);
+    setOpen(false);
+    setSearch('');
+    searchInputRef.current?.focus();
+  };
+
+  const clearSearch = () => {
+    setSearch('');
+    searchInputRef.current?.focus();
   };
 
   if (isLoading) {
@@ -64,37 +82,48 @@ export function AgentTypeSelector({
           disabled={disabled}
         >
           <span className="truncate">{getSelectedLabel()}</span>
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronDown
+            className={cn(
+              'ml-2 h-4 w-4 shrink-0 opacity-50 transition-transform',
+              open && 'rotate-180'
+            )}
+          />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-72 p-0" align="start">
         <div className="border-b p-2">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={searchInputRef}
               placeholder="Search agents..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8"
+              className="h-8 pl-8 pr-7 text-xs"
             />
+            {search && (
+              <button
+                onClick={clearSearch}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 hover:bg-muted"
+              >
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            )}
           </div>
         </div>
-        <ScrollArea className="h-[300px]">
+        <ScrollArea className="h-[240px]">
           {filteredAgents.length === 0 ? (
-            <div className="p-4 text-center text-sm text-muted-foreground">
-              {agents.length === 0
-                ? 'No agents available'
-                : 'No agents match your search'}
+            <div className="flex flex-col items-center justify-center py-4 text-center">
+              <p className="text-xs text-muted-foreground">{agents.length === 0 ? 'No agents available' : 'No agents match'}</p>
             </div>
           ) : (
-            <div className="p-1">
+            <div className="p-2">
               {['primary', 'subagent'].map((mode) => {
                 const modeAgents = filteredAgents.filter((a) => a.mode === mode);
                 if (modeAgents.length === 0) return null;
                 return (
-                  <div key={mode} className="mb-2">
-                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <div key={mode} className="mb-1">
+                    <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                       {mode === 'primary' ? 'Primary' : 'Subagent'}
                     </div>
                     {modeAgents.map((agent) => {
@@ -102,15 +131,9 @@ export function AgentTypeSelector({
                       return (
                         <button
                           key={agent.id}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onChange(agent.id);
-                            setOpen(false);
-                            searchInputRef.current?.focus();
-                          }}
+                          onClick={() => handleSelect(agent.id)}
                           className={cn(
-                            'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',
+                            'group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all',
                             selected
                               ? 'bg-primary/10 text-primary'
                               : 'hover:bg-muted'
@@ -118,15 +141,15 @@ export function AgentTypeSelector({
                         >
                           <div
                             className={cn(
-                              'flex h-4 w-4 items-center justify-center rounded border',
+                              'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
                               selected
                                 ? 'border-primary bg-primary text-primary-foreground'
-                                : 'border-muted-foreground/30'
+                                : 'border-muted-foreground/30 group-hover:border-muted-foreground/50'
                             )}
                           >
-                            {selected && <Check className="h-3 w-3" />}
+                            {selected && <Check className="h-2.5 w-2.5" />}
                           </div>
-                          <span className="flex-1 truncate">{agent.name}</span>
+                          <span className="flex-1 truncate text-xs">{agent.name}</span>
                         </button>
                       );
                     })}

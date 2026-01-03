@@ -25,6 +25,7 @@ import {
   PopoverTrigger,
 } from '@core/ui/popover';
 import { SourceSelector } from './source-selector';
+import { AgentTypeSelector } from './agent-type-selector';
 import { useAppStore } from '@/store/use-app-store';
 import { useAgentManagerStore } from '../store/agent-manager-store';
 import { opencodeClient } from '../api/opencode';
@@ -267,22 +268,12 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
           {/* Agent type selector */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Agent Type</Label>
-            <Select value={agentType} onValueChange={setAgentType} disabled={loadingProviders}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Select agent type" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableAgents.length === 0 ? (
-                  <SelectItem value="build">Build</SelectItem>
-                ) : (
-                  availableAgents.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            <AgentTypeSelector
+              agents={availableAgents}
+              value={agentType}
+              onChange={setAgentType}
+              isLoading={loadingProviders}
+            />
           </div>
 
           {/* Models with search */}
