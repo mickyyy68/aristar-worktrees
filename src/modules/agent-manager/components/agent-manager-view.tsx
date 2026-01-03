@@ -9,9 +9,9 @@ import { ChatInput } from './chat/chat-input';
 import { AgentActions, AgentToolbarActions } from './agent-actions';
 import { CreateTaskDialog } from './create-task-dialog';
 import { StatusBadge } from './status-badge';
-import { useAgentManagerStore } from '../store/agent-manager-store';
+import { useAgentManagerStore, getAgentKey } from '../store/agent-manager-store';
 import { useAppStore } from '@/store/use-app-store';
-import { useAgentSSE } from '../api/use-agent-sse';
+import { useAgentMessages } from '../hooks/use-agent-messages';
 import type { Task } from '../store/types';
 import { logger } from '@core/lib';
 
@@ -24,7 +24,6 @@ export function AgentManagerView() {
     setActiveAgent,
     loadTasks,
     sendFollowUp,
-    agentOpencodePorts,
     acceptAgent,
     removeAgentFromTask,
     stopAgent,
@@ -91,26 +90,16 @@ export function AgentManagerView() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTask, activeAgentId, setActiveAgent]);
 
-  // Get port and session for SSE subscription
-  // Use composite key (taskId:agentId) for agentOpencodePorts lookup
-  const agentKey = activeTaskId && activeAgentId ? `${activeTaskId}:${activeAgentId}` : null;
-  const agentPort = agentKey ? agentOpencodePorts[agentKey] : null;
-  const agentSessionId = activeAgent?.sessionId || null;
+  // Get agent key for message lookup
+  const agentKey = activeTaskId && activeAgentId ? getAgentKey(activeTaskId, activeAgentId) : null;
 
-  // Subscribe to SSE events for the active agent
-  const { messages, isLoading } = useAgentSSE(
-    activeTaskId,
-    activeAgentId,
-    agentPort || null,
-    agentSessionId
-  );
+  // Get messages from the new message store (no SSE management needed here)
+  const { messages, isLoading } = useAgentMessages(agentKey);
 
   logger.debug('[AgentManagerView]', 'Render', {
     activeTaskId,
     activeAgentId,
     agentKey,
-    agentPort,
-    agentSessionId,
     messagesCount: messages.length,
     isLoading,
   });
@@ -186,7 +175,7 @@ export function AgentManagerView() {
     setDeleteConfirmTask(null);
   }, [deleteConfirmTask, deleteTask]);
 
-  // Note: messages and isLoading now come from useAgentSSE hook above
+  // Note: messages and isLoading come from useAgentMessages hook
 
   return (
     <div className="flex flex-1 overflow-hidden">

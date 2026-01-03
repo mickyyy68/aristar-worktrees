@@ -45,11 +45,17 @@ All per-agent state uses this composite key:
 agent-manager/
 ├── api/
 │   ├── opencode.ts        # OpenCode HTTP client
-│   ├── use-agent-sse.ts   # SSE hook for real-time events
+│   ├── opencode-types.ts  # Consolidated type definitions for OpenCode API
+│   ├── sse-manager.ts     # Centralized SSE connection manager
+│   ├── use-agent-sse.ts   # SSE hook (legacy, being deprecated)
 │   └── index.ts
 ├── store/
 │   ├── types.ts           # Type definitions
-│   ├── agent-manager-store.ts # Zustand store
+│   ├── agent-manager-store.ts # Zustand store for tasks/agents
+│   ├── message-store.ts   # Zustand store for messages
+│   └── index.ts
+├── hooks/
+│   ├── use-agent-messages.ts  # Read-only hook for agent messages
 │   └── index.ts
 ├── components/
 │   ├── chat/
@@ -93,12 +99,65 @@ import { opencodeClient } from '@agent-manager/api';
 // SSE hook
 import { useAgentSSE } from '@agent-manager/api';
 
+// SSE manager (centralized connection management)
+import { sseManager } from '@agent-manager/api';
+
+// Message hook (read-only)
+import { useAgentMessages, useAgentMessagesById } from '@agent-manager/hooks';
+
 // Store
 import { useAgentManagerStore } from '@agent-manager/store';
+import { useMessageStore } from '@agent-manager/store';
 
 // Types
-import type { Task, TaskAgent, StreamingMessage } from '@agent-manager/store';
+import type { Task, TaskAgent } from '@agent-manager/store';
+import type { Message, ToolInvocationPart, SSEEvent } from '@agent-manager/api';
 ```
+
+## Architecture
+
+### SSE Connection Management
+
+The module uses a centralized `sseManager` singleton that maintains **one SSE connection per OpenCode server port**. This avoids race conditions and duplicate connections when multiple agents share the same port or when React components re-render.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     sseManager (singleton)                  │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ connections: Map<port, EventSource>                     ││
+│  │ subscribers: Map<`${port}:${sessionId}`, Set<callback>> ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   useMessageStore (Zustand)                 │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ messages: Map<agentKey, Message[]>                      ││
+│  │ streamingMessages: Map<agentKey, Message>               ││
+│  │ pendingParts: Map<messageId, MessagePart[]>             ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────┐
+│              useAgentMessages (read-only hook)              │
+│  Returns: { messages, isLoading, streamingMessage }         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Design Principles
+
+1. **Imperative SSE Management**: SSE connections are managed imperatively in store actions (not React hooks), eliminating race conditions on component mount/unmount.
+
+2. **Single Connection Per Port**: Multiple sessions on the same port share one EventSource connection with event routing by session ID.
+
+3. **Separation of Concerns**: 
+   - `sseManager` handles connections
+   - `useMessageStore` handles message state
+   - `useAgentMessages` provides read-only React access
+
+4. **Race Condition Handling**: The message store handles SSE events that arrive out of order (e.g., `message.part.updated` before `message.updated`).
 
 ## API Client (`api/opencode.ts`)
 
@@ -200,9 +259,92 @@ await opencodeClient.abortSession(sessionId);
 const health = await opencodeClient.healthCheck();
 ```
 
-## SSE Hook (`api/use-agent-sse.ts`)
+## SSE Manager (`api/sse-manager.ts`)
 
-The `useAgentSSE` hook manages SSE connections and message state.
+The `sseManager` singleton manages centralized SSE connections.
+
+```typescript
+import { sseManager } from '@agent-manager/api';
+
+// Connect to an OpenCode server port
+sseManager.connect(port);
+
+// Subscribe to events for a specific session
+const unsubscribe = sseManager.subscribe(port, sessionId, agentKey, (event) => {
+  console.log('SSE Event:', event.type, event.properties);
+});
+
+// Disconnect from a port (when no more subscribers)
+sseManager.disconnect(port);
+
+// Clean up on app shutdown
+sseManager.disconnectAll();
+```
+
+### How It Works
+
+1. `connect(port)` creates a single EventSource for that port (if not already connected)
+2. `subscribe(port, sessionId, agentKey, callback)` registers a listener that receives events filtered by session ID
+3. Events are dispatched to all subscribers whose session ID matches the event
+4. `disconnect(port)` closes the connection and cleans up all subscribers
+
+## Message Store (`store/message-store.ts`)
+
+Dedicated Zustand store for agent messages with full streaming support.
+
+```typescript
+import { useMessageStore } from '@agent-manager/store';
+
+// In a component (read-only access)
+const messages = useMessageStore((s) => s.messages.get(agentKey) ?? []);
+const isLoading = useMessageStore((s) => s.loading.get(agentKey) ?? false);
+const streamingMessage = useMessageStore((s) => s.streamingMessages.get(agentKey));
+
+// In store actions (write access)
+const messageStore = useMessageStore.getState();
+messageStore.addUserMessage(agentKey, 'Fix the bug');
+messageStore.handleSSEEvent(agentKey, event);
+messageStore.loadMessages(agentKey, existingMessages);
+```
+
+### State Shape
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `messages` | `Map<agentKey, Message[]>` | Completed messages per agent |
+| `streamingMessages` | `Map<agentKey, Message>` | Current streaming message |
+| `loading` | `Map<agentKey, boolean>` | Loading indicator per agent |
+| `pendingParts` | `Map<messageId, MessagePart[]>` | Parts that arrived before their message |
+
+## Agent Messages Hook (`hooks/use-agent-messages.ts`)
+
+Read-only React hook for accessing agent messages.
+
+```typescript
+import { useAgentMessages, useAgentMessagesById } from '@agent-manager/hooks';
+
+function ChatComponent({ taskId, agentId }) {
+  // Using composite key directly
+  const { messages, isLoading, streamingMessage } = useAgentMessages(`${taskId}:${agentId}`);
+
+  // Or using task/agent IDs
+  const { messages, isLoading, streamingMessage } = useAgentMessagesById(taskId, agentId);
+
+  return (
+    <div>
+      {messages.map(msg => (
+        <ChatMessage key={msg.id} message={msg} />
+      ))}
+      {isLoading && <LoadingIndicator />}
+      {streamingMessage && <ChatMessage message={streamingMessage} isStreaming />}
+    </div>
+  );
+}
+```
+
+## SSE Hook (`api/use-agent-sse.ts`) [Legacy]
+
+> **Note**: This hook is being deprecated in favor of the imperative `sseManager` + `useMessageStore` approach. It's kept for backward compatibility.
 
 ```typescript
 import { useAgentSSE } from '@agent-manager/api';
@@ -267,7 +409,9 @@ function TaskList() {
 | `addAgentToTask(taskId, model)` | Add agent to task |
 | `removeAgent(taskId, agentId)` | Remove agent |
 | `acceptAgent(taskId, agentId)` | Mark agent as winner |
-| `markAgentIdle(taskId, agentId)` | Transition agent from "running" to "idle" when AI finishes |
+| `startAgent(taskId, agentId, prompt)` | Start an agent with OpenCode and send initial prompt |
+| `stopAgent(taskId, agentId)` | Stop an agent and clean up SSE subscription |
+| `sendFollowUp(taskId, agentId, prompt)` | Send a follow-up message to a running agent |
 | `updateTaskStatusFromAgents(taskId)` | Update task status based on aggregate agent statuses |
 
 ## Types
@@ -310,7 +454,9 @@ interface TaskAgent {
 type AgentStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed';
 ```
 
-### `StreamingMessage`
+### `StreamingMessage` [Legacy]
+
+> **Note**: This type is being deprecated. Use `Message` from `opencode-types.ts` instead.
 
 ```typescript
 interface StreamingMessage {
@@ -336,6 +482,76 @@ interface ToolInvocationPart {
   state: 'pending' | 'running' | 'result' | 'error' | 'completed';
   args?: unknown;
   result?: unknown;
+}
+```
+
+### `Message` (New)
+
+The new consolidated message type from `opencode-types.ts`:
+
+```typescript
+import type { Message, MessagePart, ToolInvocationPart } from '@agent-manager/api';
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  time: string;
+  parts: MessagePart[];
+}
+
+type MessagePart = TextPart | ToolInvocationPart | ReasoningPart;
+
+interface TextPart {
+  type: 'text';
+  text: string;
+}
+
+interface ToolInvocationPart {
+  type: 'tool-invocation';
+  toolInvocationId: string;
+  toolName: string;
+  state: 'pending' | 'running' | 'result' | 'error' | 'completed';
+  args?: unknown;
+  result?: unknown;
+}
+
+interface ReasoningPart {
+  type: 'reasoning';
+  text: string;
+}
+```
+
+### SSE Event Types
+
+```typescript
+import type { SSEEvent, MessageUpdatedEvent, MessagePartUpdatedEvent } from '@agent-manager/api';
+
+interface SSEEvent {
+  type: string;
+  properties: unknown;
+}
+
+interface MessageUpdatedEvent {
+  type: 'message.updated';
+  properties: {
+    info: Message;
+  };
+}
+
+interface MessagePartUpdatedEvent {
+  type: 'message.part.updated';
+  properties: {
+    part: MessagePart;
+    message: { id: string };
+  };
+}
+
+interface SessionStatusEvent {
+  type: 'session.status';
+  properties: {
+    id: string;
+    status: 'idle' | 'busy';
+  };
 }
 ```
 
@@ -430,7 +646,11 @@ const config = getToolConfig('read');
 ## Workflow Example
 
 ```typescript
+import { useAgentManagerStore } from '@agent-manager/store';
+
 // 1. User creates a task
+const { createTask, startAgent, sendFollowUp } = useAgentManagerStore.getState();
+
 const task = await createTask({
   name: 'Fix login bug',
   sourceType: 'branch',
@@ -443,22 +663,47 @@ const task = await createTask({
   ],
 });
 
-// 2. Start OpenCode server for an agent
-const port = await commands.startAgentOpencode(task.id, 'agent-1');
+// 2. Start an agent with initial prompt
+// This handles: OpenCode server start, SSE connection, session creation, and prompt sending
+await startAgent(task.id, 'agent-1', 'Fix the login bug in auth.ts');
 
-// 3. Connect client
-opencodeClient.connect(port);
-await opencodeClient.waitForReady();
+// 3. UI automatically receives SSE events via the message store
+// Components using useAgentMessages will re-render with new messages
 
-// 4. Create session and send prompt
-const session = await opencodeClient.createSession();
-await opencodeClient.sendPromptAsync('Fix the login bug in auth.ts');
+// 4. Send follow-up messages
+await sendFollowUp(task.id, 'agent-1', 'Also add unit tests');
 
-// 5. UI receives SSE events and updates in real-time
-
-// 6. When done, accept the best result
+// 5. When done, accept the best result
 await commands.acceptAgent(task.id, 'agent-1');
 await commands.cleanupUnacceptedAgents(task.id);
+```
+
+### React Component Example
+
+```typescript
+import { useAgentMessagesById } from '@agent-manager/hooks';
+import { ChatMessage, ChatInput } from '@agent-manager/components/chat';
+import { useAgentManagerStore } from '@agent-manager/store';
+
+function AgentChat({ taskId, agentId }) {
+  const { messages, isLoading, streamingMessage } = useAgentMessagesById(taskId, agentId);
+  const sendFollowUp = useAgentManagerStore((s) => s.sendFollowUp);
+
+  const handleSend = (prompt: string) => {
+    sendFollowUp(taskId, agentId, prompt);
+  };
+
+  return (
+    <div>
+      {messages.map((msg) => (
+        <ChatMessage key={msg.id} message={msg} />
+      ))}
+      {streamingMessage && <ChatMessage message={streamingMessage} isStreaming />}
+      {isLoading && <LoadingIndicator />}
+      <ChatInput onSend={handleSend} disabled={isLoading} />
+    </div>
+  );
+}
 ```
 
 ## Error Handling
@@ -467,19 +712,20 @@ API calls throw errors that should be caught:
 
 ```typescript
 try {
-  await opencodeClient.sendPromptAsync(prompt);
+  await sendFollowUp(taskId, agentId, prompt);
 } catch (error) {
   console.error('Failed to send prompt:', error);
   // Show error in UI
 }
 ```
 
-SSE connection errors are exposed via the hook:
+SSE connection errors are logged to the console. The `sseManager` handles reconnection automatically when `connect()` is called again.
 
 ```typescript
-const { error } = useAgentSSE(port, sessionId);
+// Check loading state for UI feedback
+const { isLoading } = useAgentMessages(agentKey);
 
-if (error) {
-  return <ErrorMessage message={error} />;
+if (isLoading) {
+  return <LoadingIndicator />;
 }
 ```

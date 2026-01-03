@@ -8,12 +8,14 @@ import type {
   CreateTaskParams,
   ModelSelection,
   AgentStatus,
-  MessagePart,
 } from './types';
 import type { OpenCodeMessage, OpenCodeMessageExtended } from '../api/opencode';
 import { opencodeClient, opencodeClientManager } from '../api/opencode';
 import { commands } from '@core/lib';
-import { sendMessageAsync } from '../api/use-agent-sse';
+import { sseManager } from './sse-manager';
+import { useMessageStore } from './message-store';
+import type { Message, APIPart } from '../api/opencode-types';
+import { convertAPIPart } from '../api/opencode-types';
 
 // ============ Helper Functions ============
 
@@ -28,74 +30,58 @@ export function getAgentKey(taskId: string, agentId: string): string {
 
 /**
  * Track agents that are currently being recovered to prevent race conditions.
- * This prevents duplicate recovery attempts when setActiveAgent and useAgentSSE
+ * This prevents duplicate recovery attempts when setActiveAgent and the SSE manager
  * both trigger recovery simultaneously.
  */
 const agentsBeingRecovered = new Set<string>();
 
 /**
- * Extract content from extended message parts.
- * Only extracts text parts - reasoning is stored separately and not shown as main content.
+ * Track SSE unsubscribe functions for cleanup
  */
-function extractContentFromParts(parts: MessagePart[]): string {
-  if (!parts || parts.length === 0) {
-    console.log('[extractContentFromParts] No parts provided');
-    return '';
-  }
+const sseUnsubscribers = new Map<string, () => void>();
 
-  console.log('[extractContentFromParts] Input parts:', JSON.stringify(parts, null, 2));
-
-  const textParts: string[] = [];
-
-  for (const part of parts) {
-    console.log('[extractContentFromParts] Processing part:', {
-      type: part.type,
-      hasText: 'text' in part,
-      textValue: part.type === 'text' ? (part as any).text : undefined
-    });
-    
-    // Only extract text parts - reasoning is internal thinking and should not be shown
-    if (part.type === 'text' && 'text' in part && typeof part.text === 'string') {
-      textParts.push(part.text);
-    }
-    // Skip reasoning, tool, step-start, step-finish parts - they don't contribute to main content
-  }
-
-  const allText = textParts.join('\n');
-  console.log('[extractContentFromParts] Result:', {
-    textPartsCount: textParts.length,
-    extractedContent: allText.substring(0, 200) + '...'
-  });
-  
-  return allText;
+/**
+ * Send a message using async API (for use with SSE streaming)
+ * The response will come through SSE events
+ */
+async function sendMessageAsync(
+  port: number,
+  sessionId: string,
+  prompt: string,
+  options?: { model?: string; agent?: string }
+): Promise<void> {
+  opencodeClient.connect(port);
+  opencodeClient.setSession(sessionId);
+  await opencodeClient.sendPromptAsync(prompt, options);
 }
 
 /**
- * Convert extended messages (with parts) to standard OpenCodeMessage format.
- * Properly extracts content from text and reasoning parts.
+ * Convert extended messages from API to internal Message format.
+ * Preserves full parts information for tool display.
  */
-function extendedToStandardMessages(messages: OpenCodeMessageExtended[]): OpenCodeMessage[] {
-  console.log('[extendedToStandardMessages] Input messages:', messages.length);
-  
-  const result = messages.map((msg, index) => {
-    const extractedContent = extractContentFromParts(msg.parts || []);
-    console.log(`[extendedToStandardMessages] Message ${index}:`, {
-      id: msg.id,
-      role: msg.role,
-      partsCount: msg.parts?.length,
-      extractedContent: extractedContent.substring(0, 100) + '...'
-    });
+function convertExtendedToMessages(messages: OpenCodeMessageExtended[]): Message[] {
+  return messages.map((msg) => {
+    // The API returns parts in API format, so we treat them as APIPart
+    const apiParts = (msg.parts || []) as unknown as APIPart[];
     
+    // Extract text content
+    const textContent = apiParts
+      .filter((p) => p.type === 'text')
+      .map((p) => (p as { type: 'text'; text: string }).text || '')
+      .join('\n');
+
+    // Convert parts to internal format
+    const parts = apiParts.map((p) => convertAPIPart(p));
+
     return {
       id: msg.id,
       role: msg.role,
-      content: extractedContent,
+      content: textContent,
+      parts,
       timestamp: msg.timestamp,
+      isStreaming: false,
     };
   });
-  
-  console.log('[extendedToStandardMessages] Output messages:', result.length);
-  return result;
 }
 
 // ============ State Interface ============
@@ -115,15 +101,16 @@ interface AgentManagerState {
   isLoadingOpenCodeData: boolean;
   error: string | null;
 
-  // Per-agent chat state (keyed by taskId:agentId composite key)
-  agentMessages: Record<string, OpenCodeMessage[]>; // "taskId:agentId" -> messages
-  agentLoading: Record<string, boolean>; // "taskId:agentId" -> loading state
-
   // OpenCode connection state per agent (keyed by taskId:agentId composite key)
   agentOpencodePorts: Record<string, number>; // "taskId:agentId" -> port
 
   // Orphaned agents (worktree missing)
   orphanedAgents: Record<string, string[]>; // taskId -> agentIds with missing worktrees
+
+  // DEPRECATED: Messages are now in useMessageStore
+  // These are kept for backward compatibility during migration
+  agentMessages: Record<string, OpenCodeMessage[]>;
+  agentLoading: Record<string, boolean>;
 }
 
 // ============ Actions Interface ============
@@ -404,20 +391,26 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
 
           await commands.removeAgentFromTask(taskId, agentId, deleteWorktree);
           
-          // Clean up agent-specific state (ports, messages, loading, client, SSE)
+          // Clean up agent-specific state
           const agentKey = getAgentKey(taskId, agentId);
           
-          // Clean up the per-agent OpenCode client and SSE subscription
+          // Clean up SSE subscription
+          const unsub = sseUnsubscribers.get(agentKey);
+          if (unsub) {
+            unsub();
+            sseUnsubscribers.delete(agentKey);
+          }
+          
+          // Clean up the per-agent OpenCode client (legacy)
           opencodeClientManager.cleanupSSE(agentKey);
           opencodeClientManager.removeClient(agentKey);
+          
+          // Clean up message store
+          useMessageStore.getState().cleanupAgent(agentKey);
           
           set((state) => {
             // Remove agent from agentOpencodePorts
             const { [agentKey]: _removedPort, ...remainingPorts } = state.agentOpencodePorts;
-            // Remove agent from agentMessages
-            const { [agentKey]: _removedMessages, ...remainingMessages } = state.agentMessages;
-            // Remove agent from agentLoading
-            const { [agentKey]: _removedLoading, ...remainingLoading } = state.agentLoading;
             
             return {
               tasks: state.tasks.map((t) =>
@@ -427,8 +420,6 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
               ),
               activeAgentId: state.activeAgentId === agentId ? null : state.activeAgentId,
               agentOpencodePorts: remainingPorts,
-              agentMessages: remainingMessages,
-              agentLoading: remainingLoading,
               isLoading: false,
             };
           });
@@ -544,44 +535,62 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
         }
 
         const agentKey = getAgentKey(taskId, agentId);
+        const messageStore = useMessageStore.getState();
 
-        set((state) => ({
-          agentLoading: { ...state.agentLoading, [agentKey]: true },
-        }));
+        // Set loading in new message store
+        messageStore.setLoading(agentKey, true);
 
         try {
-          // Start OpenCode server for this agent
+          // 1. Start OpenCode server for this agent
           const port = await commands.startAgentOpencode(taskId, agentId);
 
           set((state) => ({
             agentOpencodePorts: { ...state.agentOpencodePorts, [agentKey]: port },
           }));
 
-          // Connect to the server and wait for it to be ready
+          // 2. Connect to the server and wait for it to be ready
           opencodeClient.connect(port);
           const isReady = await opencodeClient.waitForReady();
           if (!isReady) {
             throw new Error('OpenCode server did not become ready');
           }
 
-          // CRITICAL: Establish SSE connection BEFORE creating session and sending prompt
-          // This ensures we don't miss any events (race condition fix)
-          await opencodeClientManager.establishSSEConnection(agentKey, port);
+          // 3. Establish SSE connection (one per port, shared by all sessions on that port)
+          await sseManager.connect(port);
 
-          // Always create a new session for fresh execution
-          // This ensures we don't load old messages from previous runs
-          // Include timestamp for easy identification in OpenCode's session list
+          // 4. Create a new session for fresh execution
           const session = await opencodeClient.createSession(
             `${task.name} - ${agent.modelId} - ${new Date().toLocaleString()}`
           );
           const sessionId = session.id;
 
-          // Clear any existing messages in local state for this agent
-          set((state) => ({
-            agentMessages: { ...state.agentMessages, [agentKey]: [] },
-          }));
+          // 5. Clear any existing messages in the new message store
+          messageStore.clearMessages(agentKey);
 
-          // Update agent with session ID and status
+          // 6. Register SSE handler for this session BEFORE sending prompt
+          // This prevents race conditions where events arrive before we're listening
+          const existingUnsub = sseUnsubscribers.get(agentKey);
+          if (existingUnsub) {
+            existingUnsub();
+          }
+          
+          const unsubscribe = sseManager.subscribe(port, sessionId, (event) => {
+            // Dispatch events to the message store
+            messageStore.handleSSEEvent(agentKey, event);
+            
+            // Handle session.status for agent status updates
+            if (event.type === 'session.status' || event.type === 'session.idle') {
+              const status = (event.properties as { status?: { type: string } | string })?.status;
+              const statusType = typeof status === 'object' ? status?.type : status;
+              if (statusType === 'idle') {
+                // Mark agent as idle (completed processing)
+                get().markAgentIdle(taskId, agentId);
+              }
+            }
+          });
+          sseUnsubscribers.set(agentKey, unsubscribe);
+
+          // 7. Update agent with session ID and status
           await commands.updateAgentSession(taskId, agentId, sessionId);
           await commands.updateAgentStatus(taskId, agentId, 'running' as AgentStatus);
 
@@ -598,37 +607,30 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
             ),
           }));
 
-          // Add user message
-          const userMessage: OpenCodeMessage = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: initialPrompt,
-            timestamp: new Date(),
-          };
+          // 8. Add user message to new message store
+          messageStore.addUserMessage(agentKey, initialPrompt);
 
-          set((state) => ({
-            agentMessages: {
-              ...state.agentMessages,
-              [agentKey]: [...(state.agentMessages[agentKey] || []), userMessage],
-            },
-          }));
-
-          // Send the prompt asynchronously - response will come via SSE
+          // 9. Send the prompt asynchronously - response will come via SSE
           const modelString = `${agent.providerId}/${agent.modelId}`;
           await sendMessageAsync(port, sessionId, initialPrompt, {
             model: modelString,
             agent: agent.agentType || task.agentType,
           });
 
-          // Note: Loading state will be managed by SSE hook when message.completed arrives
-          // Status will be updated when task is manually stopped or all agents complete
+          // Note: Loading state will be managed by message store when session.idle arrives
         } catch (err) {
           console.error(`[AgentManager] Failed to start agent ${agentId}:`, err);
           const errorMsg = String(err);
-          set((state) => ({
-            agentLoading: { ...state.agentLoading, [agentKey]: false },
-            error: errorMsg,
-          }));
+          
+          // Clean up SSE subscription on error
+          const unsub = sseUnsubscribers.get(agentKey);
+          if (unsub) {
+            unsub();
+            sseUnsubscribers.delete(agentKey);
+          }
+          
+          messageStore.setLoading(agentKey, false);
+          set({ error: errorMsg });
           toast.error('Failed to start agent', { description: errorMsg });
 
           // Update agent status to failed
@@ -658,6 +660,13 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
         const agent = task?.agents.find((a) => a.id === agentId);
         const agentKey = getAgentKey(taskId, agentId);
 
+        // Clean up SSE subscription
+        const unsub = sseUnsubscribers.get(agentKey);
+        if (unsub) {
+          unsub();
+          sseUnsubscribers.delete(agentKey);
+        }
+
         if (agent?.sessionId) {
           try {
             await opencodeClient.abortSession(agent.sessionId);
@@ -674,6 +683,9 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
 
         await commands.updateAgentStatus(taskId, agentId, 'completed' as AgentStatus);
 
+        // Update loading state in new message store
+        useMessageStore.getState().setLoading(agentKey, false);
+
         set((state) => ({
           tasks: state.tasks.map((t) =>
             t.id === taskId
@@ -685,7 +697,6 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
                 }
               : t
           ),
-          agentLoading: { ...state.agentLoading, [agentKey]: false },
         }));
       },
 
@@ -850,6 +861,8 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           ? task.agents.filter((a) => targetAgentIds.includes(a.id))
           : task.agents;
 
+        const messageStore = useMessageStore.getState();
+
         for (const agent of agents) {
           if (!agent.sessionId) continue;
 
@@ -857,25 +870,29 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           const port = agentOpencodePorts[agentKey];
           if (!port) continue;
 
-          set((state) => ({
-            agentLoading: { ...state.agentLoading, [agentKey]: true },
-          }));
+          // Set loading in new message store
+          messageStore.setLoading(agentKey, true);
 
           try {
-            // Add user message
-            const userMessage: OpenCodeMessage = {
-              id: Date.now().toString(),
-              role: 'user',
-              content: prompt,
-              timestamp: new Date(),
-            };
+            // Add user message to new message store
+            messageStore.addUserMessage(agentKey, prompt);
 
-            set((state) => ({
-              agentMessages: {
-                ...state.agentMessages,
-                [agentKey]: [...(state.agentMessages[agentKey] || []), userMessage],
-              },
-            }));
+            // Ensure SSE subscription is active for this session
+            if (!sseUnsubscribers.has(agentKey)) {
+              await sseManager.connect(port);
+              const unsubscribe = sseManager.subscribe(port, agent.sessionId, (event) => {
+                messageStore.handleSSEEvent(agentKey, event);
+                
+                if (event.type === 'session.status' || event.type === 'session.idle') {
+                  const status = (event.properties as { status?: { type: string } | string })?.status;
+                  const statusType = typeof status === 'object' ? status?.type : status;
+                  if (statusType === 'idle') {
+                    get().markAgentIdle(taskId, agent.id);
+                  }
+                }
+              });
+              sseUnsubscribers.set(agentKey, unsubscribe);
+            }
 
             // Send asynchronously - response will come via SSE
             const modelString = `${agent.providerId}/${agent.modelId}`;
@@ -883,14 +900,12 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
               model: modelString,
             });
 
-            // Note: Loading state will be managed by SSE hook when message.completed arrives
+            // Note: Loading state will be managed by message store when session.idle arrives
           } catch (err) {
             console.error(`[AgentManager] Failed to send follow-up to ${agent.id}:`, err);
             const errorMsg = String(err);
-            set((state) => ({
-              agentLoading: { ...state.agentLoading, [agentKey]: false },
-              error: `Failed to send message: ${errorMsg}`,
-            }));
+            messageStore.setLoading(agentKey, false);
+            set({ error: `Failed to send message: ${errorMsg}` });
             toast.error('Failed to send message', { description: errorMsg });
           }
         }
@@ -1012,13 +1027,14 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
       // ============ OpenCode Server Recovery ============
        
        recoverTaskAgents: async (taskId) => {
-         const { tasks, agentOpencodePorts, agentMessages, orphanedAgents } = get();
+         const { tasks, agentOpencodePorts, orphanedAgents } = get();
          const task = tasks.find((t) => t.id === taskId);
          if (!task) {
            return;
          }
          
          const orphanedIds = orphanedAgents[taskId] || [];
+         const messageStore = useMessageStore.getState();
          
          // Recover ALL agents with sessions, not just the active one
          // This ensures chat history is available when switching between agents
@@ -1032,17 +1048,15 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
            
            const agentKey = getAgentKey(taskId, agent.id);
            
-           // Issue 2 fix: Check if this agent is already being recovered (race condition guard)
+           // Check if this agent is already being recovered (race condition guard)
            if (agentsBeingRecovered.has(agentKey)) {
              console.log('[recoverTaskAgents] Agent already being recovered, skipping:', agentKey);
              continue;
            }
            
-           // Issue 4 fix: Skip if we already have assistant messages (meaning we've recovered/streamed)
-           // Only check for assistant messages - user messages are added locally before API call
-           // so their presence doesn't mean we have the full conversation
-           const existingMessages = agentMessages[agentKey];
-           const hasAssistantMessages = existingMessages?.some(m => m.role === 'assistant');
+           // Skip if we already have assistant messages in the new message store
+           const existingMessages = messageStore.getAllMessages(agentKey);
+           const hasAssistantMessages = existingMessages.some(m => m.role === 'assistant');
            if (hasAssistantMessages) {
              // Still need to ensure port is set for SSE, but don't re-fetch messages
              const existingPort = agentOpencodePorts[agentKey];
@@ -1056,16 +1070,23 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
                    agentOpencodePorts: { ...state.agentOpencodePorts, [agentKey]: port },
                  }));
                  
-                 // Also establish SSE connection if not already connected
-                 if (!opencodeClientManager.isSSEConnected(agentKey)) {
-                   try {
-                     await opencodeClientManager.establishSSEConnection(agentKey, port);
-                   } catch (err) {
-                     console.warn(`[recoverTaskAgents] Failed to establish SSE for ${agent.id}:`, err);
-                   }
+                 // Ensure SSE connection and subscription for ongoing events
+                 await sseManager.connect(port);
+                 if (!sseUnsubscribers.has(agentKey) && agent.sessionId) {
+                   const unsubscribe = sseManager.subscribe(port, agent.sessionId, (event) => {
+                     messageStore.handleSSEEvent(agentKey, event);
+                     if (event.type === 'session.status' || event.type === 'session.idle') {
+                       const status = (event.properties as { status?: { type: string } | string })?.status;
+                       const statusType = typeof status === 'object' ? status?.type : status;
+                       if (statusType === 'idle') {
+                         get().markAgentIdle(taskId, agent.id);
+                       }
+                     }
+                   });
+                   sseUnsubscribers.set(agentKey, unsubscribe);
                  }
                } catch (err) {
-                 console.error(`[recoverTaskAgents] Failed to get port for ${agent.id}:`, err);
+                 console.warn(`[recoverTaskAgents] Failed to get port for ${agent.id}:`, err);
                }
              }
              continue;
@@ -1099,37 +1120,42 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
                continue;
              }
              
-             // Establish SSE connection for recovery
-             try {
-               await opencodeClientManager.establishSSEConnection(agentKey, port);
-             } catch (err) {
-               console.warn('[recoverTaskAgents] Failed to establish SSE for agent:', agent.id, err);
-               // Continue anyway - SSE will be established by the hook if needed
+             // Establish SSE connection for this port
+             await sseManager.connect(port);
+             
+             // Subscribe to session events
+             if (!sseUnsubscribers.has(agentKey) && agent.sessionId) {
+               const unsubscribe = sseManager.subscribe(port, agent.sessionId, (event) => {
+                 messageStore.handleSSEEvent(agentKey, event);
+                 if (event.type === 'session.status' || event.type === 'session.idle') {
+                   const status = (event.properties as { status?: { type: string } | string })?.status;
+                   const statusType = typeof status === 'object' ? status?.type : status;
+                   if (statusType === 'idle') {
+                     get().markAgentIdle(taskId, agent.id);
+                   }
+                 }
+               });
+               sseUnsubscribers.set(agentKey, unsubscribe);
              }
              
             // Load messages from the session using extended API to get parts
-            // Note: agent.sessionId is guaranteed to exist here because we filter by it above
             console.log('[recoverTaskAgents] Loading messages for session:', agent.sessionId);
             opencodeClient.setSession(agent.sessionId!);
             const extendedMessages = await opencodeClient.getSessionMessagesExtended();
             console.log('[recoverTaskAgents] Extended messages count:', extendedMessages.length);
             
-            // Convert extended messages to standard format with properly extracted content
-            const messages = extendedToStandardMessages(extendedMessages);
+            // Convert to new Message format preserving parts
+            const messages = convertExtendedToMessages(extendedMessages);
             console.log('[recoverTaskAgents] Converted messages:', messages.length);
             
-            // Deduplicate messages by ID to prevent showing duplicates
+            // Deduplicate messages by ID
             const uniqueMessages = messages.filter((msg, index, self) =>
               index === self.findIndex((m) => m.id === msg.id)
             );
-            console.log('[recoverTaskAgents] Unique messages:', uniqueMessages.length);
             
-            set((state) => ({
-              agentMessages: { ...state.agentMessages, [agentKey]: uniqueMessages },
-              // Reset loading state since recovery is complete
-              agentLoading: { ...state.agentLoading, [agentKey]: false },
-            }));
-            console.log('[recoverTaskAgents] Store updated for key:', agentKey);
+            // Load into new message store
+            messageStore.loadMessages(agentKey, uniqueMessages);
+            console.log('[recoverTaskAgents] Messages loaded for:', agentKey);
              
              if (serverWasStarted) {
                toast.info('Session restored', {
@@ -1165,24 +1191,17 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           opencodeClient.setSession(agent.sessionId);
           const extendedMessages = await opencodeClient.getSessionMessagesExtended();
           console.log('[loadAgentMessages] Extended messages:', extendedMessages.length);
-          console.log('[loadAgentMessages] Detail:', JSON.stringify(extendedMessages.map(m => ({
-            id: m.id,
-            role: m.role,
-            partsCount: m.parts?.length,
-            content: extractContentFromParts(m.parts || [])
-          })), null, 2));
           
-          // Convert using the same helper
-          const messages = extendedToStandardMessages(extendedMessages);
+          // Convert to new Message format preserving parts
+          const messages = convertExtendedToMessages(extendedMessages);
           
           // Deduplicate messages by ID
           const uniqueMessages = messages.filter((msg, index, self) =>
             index === self.findIndex((m) => m.id === msg.id)
           );
           
-          set((state) => ({
-            agentMessages: { ...state.agentMessages, [agentKey]: uniqueMessages },
-          }));
+          // Load into new message store
+          useMessageStore.getState().loadMessages(agentKey, uniqueMessages);
         } catch (err) {
           console.error('[AgentManager] Failed to load messages:', err);
         }
@@ -1190,19 +1209,24 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
 
       clearAgentMessages: (taskId, agentId) => {
         const agentKey = getAgentKey(taskId, agentId);
-        set((state) => ({
-          agentMessages: { ...state.agentMessages, [agentKey]: [] },
-        }));
+        useMessageStore.getState().clearMessages(agentKey);
       },
 
       addAgentMessage: (taskId, agentId, message) => {
         const agentKey = getAgentKey(taskId, agentId);
-        set((state) => ({
-          agentMessages: {
-            ...state.agentMessages,
-            [agentKey]: [...(state.agentMessages[agentKey] || []), message],
-          },
-        }));
+        // Convert OpenCodeMessage to the new Message format
+        const newMessage: Message = {
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          parts: [{ type: 'text', text: message.content }],
+          timestamp: message.timestamp,
+          isStreaming: false,
+        };
+        // Add to completed messages in the store
+        const messageStore = useMessageStore.getState();
+        const existingMessages = messageStore.messages[agentKey] || [];
+        messageStore.loadMessages(agentKey, [...existingMessages, newMessage]);
       },
 
       // ============ Error Handling ============

@@ -281,7 +281,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
               onChange={setSelectedModels}
               isLoading={loadingProviders || isLoadingOpenCodeData}
             />
-            <div className="min-w-0">
+            <div className="min-h-[28px] min-w-0">
               <SelectedModelsList
                 providers={providers}
                 selectedModels={selectedModels}

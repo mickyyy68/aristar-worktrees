@@ -2,11 +2,10 @@ import { User, Bot } from 'lucide-react';
 import { MarkdownRenderer } from '@core/ui/markdown-renderer';
 import { ToolsSection } from '../tools/tools-section';
 import { cn } from '@core/lib/utils';
-import type { OpenCodeMessage } from '../../api/opencode';
-import type { MessagePart, ToolInvocationPart } from '../../store/types';
+import type { Message, ToolInvocationPart } from '../../api/opencode-types';
 
 interface ChatMessageProps {
-  message: OpenCodeMessage & { parts?: MessagePart[] };
+  message: Message;
 }
 
 function formatTime(date: Date): string {

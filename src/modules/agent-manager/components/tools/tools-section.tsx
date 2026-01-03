@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, Wrench } from 'lucide-react';
 import { cn } from '@core/lib/utils';
 import { useAppStore } from '@/store/use-app-store';
 import { ToolCallDisplay } from './tool-call-display';
-import type { ToolInvocationPart } from '../../store/types';
+import type { ToolInvocationPart } from '../../api/opencode-types';
 
 interface ToolsSectionProps {
   toolCalls: ToolInvocationPart[];

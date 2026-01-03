@@ -1,27 +1,23 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { ScrollArea } from '@core/ui/scroll-area';
 import { ChatMessage, ChatMessageLoading } from './chat-message';
-import type { OpenCodeMessage } from '../../api/opencode';
-import type { MessagePart } from '../../store/types';
+import type { Message, MessagePart } from '../../api/opencode-types';
 import { logger } from '@core/lib';
 
 interface ChatViewProps {
-  messages: OpenCodeMessage[];
+  messages: Message[];
   isLoading?: boolean;
 }
-
-type MessageWithParts = OpenCodeMessage & { parts?: MessagePart[] };
 
 /**
  * Consolidate consecutive assistant messages into single messages.
  * This groups tool-only messages with subsequent text messages,
  * providing a cleaner chat experience.
  */
-function consolidateMessages(messages: OpenCodeMessage[]): MessageWithParts[] {
-  const result: MessageWithParts[] = [];
+function consolidateMessages(messages: Message[]): Message[] {
+  const result: Message[] = [];
   
   for (const message of messages) {
-    const msg = message as MessageWithParts;
     const lastMsg = result[result.length - 1];
     
     // Check if we can merge with the previous message
@@ -29,26 +25,26 @@ function consolidateMessages(messages: OpenCodeMessage[]): MessageWithParts[] {
     if (
       lastMsg &&
       lastMsg.role === 'assistant' &&
-      msg.role === 'assistant' &&
+      message.role === 'assistant' &&
       !lastMsg.content?.trim()
     ) {
       // Merge: combine parts from both messages
-      const combinedParts = [
+      const combinedParts: MessagePart[] = [
         ...(lastMsg.parts || []),
-        ...(msg.parts || []),
+        ...(message.parts || []),
       ];
       
       // Update the last message with combined content and parts
       result[result.length - 1] = {
         ...lastMsg,
-        content: msg.content || lastMsg.content,
+        content: message.content || lastMsg.content,
         parts: combinedParts,
         // Use the later timestamp
-        timestamp: msg.timestamp,
+        timestamp: message.timestamp,
       };
     } else {
       // Can't merge, add as new message
-      result.push({ ...msg });
+      result.push({ ...message });
     }
   }
   
@@ -68,8 +64,11 @@ export function ChatView({ messages, isLoading = false }: ChatViewProps) {
       if (m.role === 'user') return true;
       // Only show assistant messages that have content or parts with tools
       const hasContent = m.content && m.content.trim().length > 0;
-      const msgWithParts = m as MessageWithParts;
-      const hasToolParts = msgWithParts.parts?.some(p => p.type === 'tool-invocation');
+      const hasToolParts = m.parts?.some(p => p.type === 'tool-invocation');
+      // Debug log
+      if (m.role === 'assistant') {
+        console.log('[ChatView] Message filter:', { id: m.id, hasContent, hasToolParts, partsTypes: m.parts?.map(p => p.type) });
+      }
       return hasContent || hasToolParts;
     }),
     [messages]

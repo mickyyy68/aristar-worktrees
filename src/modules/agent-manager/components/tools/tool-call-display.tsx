@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Check, AlertCircle, Loader2 } from 'lucide-r
 import { cn } from '@core/lib/utils';
 import { useAppStore } from '@/store/use-app-store';
 import { getToolConfig, getToolLabel } from './tool-config';
-import type { ToolInvocationPart } from '../../store/types';
+import type { ToolInvocationPart } from '../../api/opencode-types';
 
 interface ToolCallDisplayProps {
   toolCall: ToolInvocationPart;

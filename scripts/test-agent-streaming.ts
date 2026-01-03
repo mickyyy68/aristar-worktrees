@@ -9,7 +9,7 @@
  */
 
 const PORT = 5149;
-const PROMPT = "Hi";
+const PROMPT = "Hi, read the root readme.md";
 const MODEL = "MiniMax-M2.1";
 const MODEL_PROVIDER = "minimax";
 const TIMEOUT_MS = 60000;
