@@ -93,19 +93,12 @@ class SSEManager {
       eventSource.onmessage = (e) => {
         try {
           const event: SSEEvent = JSON.parse(e.data);
-          
-          // Log all events for debugging - include raw properties for part.updated
-          if (event.type === 'message.part.updated') {
-            console.log('[SSE-DEBUG] message.part.updated raw props:', JSON.stringify(event.properties));
-          } else {
-            console.log('[SSE-DEBUG] Event received:', event.type, extractSessionId(event) || 'no-session');
-          }
 
           if (event.type === 'server.connected') {
             connection.isConnected = true;
             this.connections.set(port, connection);
             clearTimeout(timeout);
-            logger.debug('[SSEManager]', `Port ${port} connected`);
+            void logger.debug('[SSEManager]', `Port ${port} connected`);
             resolve();
             return;
           }
@@ -113,7 +106,7 @@ class SSEManager {
           // Dispatch event to registered handlers
           this.dispatchEvent(port, event);
         } catch (err) {
-          logger.error('[SSEManager]', 'Failed to parse SSE event:', err);
+          void logger.error('[SSEManager]', 'Failed to parse SSE event:', err);
         }
       };
 
@@ -186,31 +179,26 @@ class SSEManager {
 
     // Extract session ID from event
     const sessionId = extractSessionId(event);
-    
-    // Debug: log registered handlers
-    const registeredSessions = Array.from(connection.handlers.keys());
-    console.log('[SSE-DEBUG] Dispatching', event.type, 'sessionId:', sessionId, 'registered sessions:', registeredSessions);
 
     // Dispatch to specific session handlers
     if (sessionId) {
       const handlers = connection.handlers.get(sessionId);
-      console.log('[SSE-DEBUG] Found', handlers?.size || 0, 'handlers for session', sessionId);
       handlers?.forEach((handler) => {
         try {
           handler(event);
         } catch (err) {
-          logger.error('[SSEManager]', 'Handler error:', err);
+          void logger.error('[SSEManager]', 'Handler error:', err);
         }
       });
     }
 
-    // Also dispatch to wildcard handlers (for debugging or global listeners)
+    // Also dispatch to wildcard handlers (for global listeners)
     const wildcardHandlers = connection.handlers.get('*');
     wildcardHandlers?.forEach((handler) => {
       try {
         handler(event);
       } catch (err) {
-        logger.error('[SSEManager]', 'Wildcard handler error:', err);
+        void logger.error('[SSEManager]', 'Wildcard handler error:', err);
       }
     });
   }

@@ -157,7 +157,11 @@ The module uses a centralized `sseManager` singleton that maintains **one SSE co
    - `useMessageStore` handles message state
    - `useAgentMessages` provides read-only React access
 
-4. **Race Condition Handling**: The message store handles SSE events that arrive out of order (e.g., `message.part.updated` before `message.updated`).
+4. **Race Condition Handling**: The message store handles several SSE edge cases:
+   - Parts arriving before their parent message (`pendingParts` buffer)
+   - Rapid part updates during streaming (functional `set()` pattern)
+   - Multiple messages in sequence (tool message then text response)
+   - Duplicate `message.updated` events (ignored)
 
 ## API Client (`api/opencode.ts`)
 
@@ -296,9 +300,9 @@ Dedicated Zustand store for agent messages with full streaming support.
 import { useMessageStore } from '@agent-manager/store';
 
 // In a component (read-only access)
-const messages = useMessageStore((s) => s.messages.get(agentKey) ?? []);
-const isLoading = useMessageStore((s) => s.loading.get(agentKey) ?? false);
-const streamingMessage = useMessageStore((s) => s.streamingMessages.get(agentKey));
+const messages = useMessageStore((s) => s.messages[agentKey] ?? []);
+const isLoading = useMessageStore((s) => s.loading[agentKey] ?? false);
+const streamingMessage = useMessageStore((s) => s.streamingMessages[agentKey]);
 
 // In store actions (write access)
 const messageStore = useMessageStore.getState();
@@ -311,10 +315,20 @@ messageStore.loadMessages(agentKey, existingMessages);
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `messages` | `Map<agentKey, Message[]>` | Completed messages per agent |
-| `streamingMessages` | `Map<agentKey, Message>` | Current streaming message |
-| `loading` | `Map<agentKey, boolean>` | Loading indicator per agent |
-| `pendingParts` | `Map<messageId, MessagePart[]>` | Parts that arrived before their message |
+| `messages` | `Record<agentKey, Message[]>` | Completed messages per agent |
+| `streamingMessages` | `Record<agentKey, StreamingMessage>` | Current streaming message |
+| `loading` | `Record<agentKey, boolean>` | Loading indicator per agent |
+| `pendingParts` | `Record<pendingKey, APIPart[]>` | Parts that arrived before their message |
+
+### SSE Event Handling
+
+The message store uses functional `set()` for all state updates to avoid race conditions when SSE events arrive rapidly during streaming. Key behaviors:
+
+1. **Part Buffering**: When `message.part.updated` arrives before `message.updated`, parts are buffered in `pendingParts` and applied when the message starts.
+
+2. **Message Transitions**: When a new message starts while streaming another, the existing message is completed first (preserving its parts) before starting the new one.
+
+3. **Duplicate Events**: Duplicate `message.updated` events for the same message ID are ignored.
 
 ## Agent Messages Hook (`hooks/use-agent-messages.ts`)
 

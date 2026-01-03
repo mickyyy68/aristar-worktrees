@@ -5,10 +5,22 @@
  * This is the source of truth for all message data across agents.
  *
  * Key features:
- * - Messages stored with full parts (not just content string)
- * - Streaming messages tracked separately
+ * - Messages stored with full parts (text, tool invocations, reasoning)
+ * - Streaming messages tracked separately from completed messages
  * - Loading states per agent
  * - Handles SSE events via imperative methods (not React hooks)
+ * - Race condition handling for out-of-order SSE events
+ *
+ * ## SSE Event Handling
+ *
+ * OpenCode sends events that may arrive out of order:
+ * - `message.part.updated` can arrive BEFORE `message.updated`
+ * - Multiple messages may be sent in sequence (e.g., tool message then text response)
+ *
+ * This store handles these cases by:
+ * 1. Buffering parts that arrive before their parent message (pendingParts)
+ * 2. Using functional set() to avoid race conditions with rapid updates
+ * 3. Completing existing messages before starting new ones
  */
 
 import { create } from 'zustand';
@@ -116,9 +128,8 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
   // ============ Actions ============
 
   startMessage(agentKey, messageId, role) {
-    // Use functional set() for consistency with updatePart and to avoid race conditions
+    // Use functional set() to avoid race conditions with rapid updates
     set((state) => {
-      // Create new streaming message
       const newMessage: StreamingMessage = {
         id: messageId,
         role,
@@ -128,33 +139,18 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
         isStreaming: true,
       };
 
-      // Check for and apply any buffered parts
+      // Apply any buffered parts that arrived before this message.updated event
       const pendingKey = `${agentKey}:${messageId}`;
       const bufferedParts = state.pendingParts[pendingKey] || [];
-
-      console.log('[MSG-DEBUG] startMessage:', {
-        agentKey,
-        messageId,
-        role,
-        bufferedPartsCount: bufferedParts.length,
-        bufferedPartTypes: bufferedParts.map(bp => bp.part.type),
-      });
 
       if (bufferedParts.length > 0) {
         void logger.debug(
           '[MessageStore]',
           `Applying ${bufferedParts.length} buffered parts for message ${messageId}`
         );
-
         for (const { part, delta } of bufferedParts) {
-          console.log('[MSG-DEBUG] Applying buffered part:', part.type);
           applyPartToMessage(newMessage, part, delta);
         }
-
-        console.log('[MSG-DEBUG] After applying buffered parts:', {
-          partsCount: newMessage.parts.length,
-          partTypes: newMessage.parts.map(p => p.type),
-        });
       }
 
       void logger.debug('[MessageStore]', `Started message ${messageId} for agent ${agentKey}`);
@@ -168,7 +164,6 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
           ...state.loading,
           [agentKey]: true,
         },
-        // Clear pending parts for this message
         pendingParts: {
           ...state.pendingParts,
           [pendingKey]: undefined,
@@ -184,31 +179,11 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
     set((state) => {
       const streaming = state.streamingMessages[agentKey];
 
-      // Debug: log all parts, especially tools
-      console.log('[MSG-DEBUG] updatePart called:', {
-        agentKey,
-        messageId,
-        partType: part.type,
-        hasStreaming: !!streaming,
-        streamingId: streaming?.id,
-        idsMatch: streaming?.id === messageId,
-      });
-
-      // If we don't have a streaming message yet, buffer this part
+      // If we don't have a streaming message yet, buffer this part.
+      // This handles the case where message.part.updated arrives before message.updated.
       if (!streaming || streaming.id !== messageId) {
         const pendingKey = `${agentKey}:${messageId}`;
         const existing = state.pendingParts[pendingKey] || [];
-
-        console.log('[MSG-DEBUG] Buffering part:', {
-          partType: part.type,
-          pendingKey,
-          totalBuffered: existing.length + 1,
-        });
-
-        void logger.debug(
-          '[MessageStore]',
-          `Buffered part for message ${messageId}, total buffered: ${existing.length + 1}`
-        );
 
         return {
           pendingParts: {
@@ -220,16 +195,7 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
 
       // Apply part to streaming message - create new object to ensure React re-render
       const updated: StreamingMessage = { ...streaming, parts: [...streaming.parts] };
-      const partsBefore = updated.parts.length;
       applyPartToMessage(updated, part, delta);
-      const partsAfter = updated.parts.length;
-
-      console.log('[MSG-DEBUG] After applyPartToMessage:', {
-        partType: part.type,
-        partsBefore,
-        partsAfter,
-        partTypes: updated.parts.map(p => p.type),
-      });
 
       return {
         streamingMessages: {
@@ -374,9 +340,6 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
 
   handleSSEEvent(agentKey, event) {
     const store = get();
-    
-    // Debug logging
-    console.log('[MSG-DEBUG] handleSSEEvent:', event.type, 'agentKey:', agentKey);
 
     switch (event.type) {
       case 'message.updated': {
@@ -390,25 +353,19 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
 
         // Check if we already have a streaming message for this exact message ID
         const existingStreaming = store.streamingMessages[agentKey];
-        
+
         if (existingStreaming?.id === info.id) {
-          // Same message ID - this is a duplicate event or update, ignore it
-          console.log('[MSG-DEBUG] message.updated for same ID, ignoring:', info.id);
+          // Same message ID - duplicate event, ignore it
           return;
         }
-        
+
         if (existingStreaming) {
           // A NEW message is starting while we have an existing streaming message.
-          // This happens when OpenCode sends multiple messages (e.g., tool message then text message).
+          // This happens when OpenCode sends multiple messages (e.g., tool message then text response).
           // Complete the current streaming message first before starting the new one.
-          console.log('[MSG-DEBUG] Completing existing message before starting new one:', {
-            existingId: existingStreaming.id,
-            newId: info.id,
-            existingPartsCount: existingStreaming.parts.length,
-          });
           store.completeMessage(agentKey);
         }
-        
+
         // Start the new streaming message
         store.startMessage(agentKey, info.id, info.role);
         break;
@@ -422,7 +379,7 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
         if (messageID) {
           store.updatePart(agentKey, messageID, part, delta);
         } else {
-          console.warn('[MessageStore] message.part.updated missing messageID:', part);
+          void logger.warn('[MessageStore]', 'message.part.updated missing messageID');
         }
         break;
       }
@@ -513,9 +470,8 @@ function applyPartToMessage(
   } else if (part.type === 'tool') {
     // Convert API tool part to internal format
     const toolPart: MessagePart = convertAPIPart(part);
-    console.log('[MSG-DEBUG] Tool part received:', part.tool, 'callID:', part.callID, 'status:', part.state?.status);
 
-    // Find existing tool part by callID
+    // Find existing tool part by callID to update it, or add new
     const existingIdx = message.parts.findIndex(
       (p) =>
         p.type === 'tool-invocation' &&
@@ -545,8 +501,7 @@ function applyPartToMessage(
       message.parts.push(reasoningPart);
     }
   } else {
-    // Log unhandled part types for debugging
-    console.log('[MSG-DEBUG] Unhandled part type:', partType, part);
+    // Unknown part type - ignore silently (step-start/step-finish are already filtered above)
   }
 }
 
