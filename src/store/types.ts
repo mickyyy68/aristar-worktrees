@@ -13,6 +13,19 @@ export interface WorktreeMetadata {
   createdAt: number;
 }
 
+// Theme types
+export type ThemeColorScheme = Record<string, string>;
+
+export interface ThemeDefinition {
+  name: string;
+  displayName: string;
+  description: string;
+  light: ThemeColorScheme;
+  dark: ThemeColorScheme;
+}
+
+export type ColorScheme = 'light' | 'dark' | 'system';
+
 export interface Repository {
   id: string;
   path: string;
@@ -47,7 +60,10 @@ export interface ToolDisplaySettings {
 }
 
 export interface AppSettings {
-  theme: 'light' | 'dark' | 'system';
+  /** Selected theme name */
+  themeName: string;
+  /** Color scheme preference: light, dark, or system */
+  colorScheme: ColorScheme;
   defaultBasePath?: string;
   autoRefresh: boolean;
   terminalApp: TerminalApp;

@@ -43,7 +43,8 @@ interface AppState {
 }
 
 const defaultSettings: AppSettings = {
-  theme: 'system',
+  themeName: 'aristar',
+  colorScheme: 'system',
   autoRefresh: true,
   terminalApp: 'terminal',
   editorApp: 'vscode',

@@ -52,8 +52,9 @@ fn test_init_store_default_settings() {
     let store = state.store.lock().unwrap();
 
     // Default settings should be set
-    assert_eq!(store.settings.theme, "");
-    assert!(!store.settings.auto_refresh);
+    assert_eq!(store.settings.theme_name, "aristar");
+    assert_eq!(store.settings.color_scheme, "system");
+    assert!(store.settings.auto_refresh);
 }
 
 // ============================================================================

@@ -6,12 +6,16 @@ import { Button, ScrollArea, Switch, Label } from '@core/ui';
 import { useAppStore } from '@/store/use-app-store';
 import { useAgentManagerStore } from '@agent-manager/store';
 import { Header } from '@core/components';
+import { useTheme } from '@core/hooks';
 import { RepositorySidebar, WorktreeCard, CreateWorktreeDialog, RenameDialog } from '@worktrees/components';
 import { isProtectedBranch } from '@worktrees/lib';
 import { AgentManagerView } from '@agent-manager/components';
 import type { WorktreeMetadata } from '@/store/types';
 
 function App() {
+  // Initialize theme system
+  useTheme();
+
   const {
     repositories,
     selectedRepositoryId,

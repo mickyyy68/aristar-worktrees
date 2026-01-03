@@ -33,11 +33,23 @@ core/
 ├── lib/
 │   ├── utils.ts           # cn() utility for class merging
 │   ├── commands.ts        # Tauri command wrappers
+│   ├── themes/            # Theme definitions
+│   │   ├── index.ts       # Theme registry and helpers
+│   │   ├── aristar.ts     # Aristar theme (default)
+│   │   ├── claude.ts      # Claude-inspired theme
+│   │   ├── vercel.ts      # Vercel-inspired theme
+│   │   └── nature.ts      # Nature-inspired theme
+│   └── index.ts
+├── hooks/
+│   ├── use-theme.ts       # Theme management hook
 │   └── index.ts
 ├── components/
 │   ├── header.tsx         # App header with navigation
 │   ├── settings-dialog.tsx # Application settings
 │   ├── theme-toggle.tsx   # Light/dark/system theme toggle
+│   ├── theme-preview.tsx  # Theme color preview card
+│   ├── theme-selector.tsx # Theme dropdown selector
+│   ├── color-scheme-toggle.tsx # Light/dark/system toggle
 │   └── index.ts
 ├── index.ts               # Public exports
 └── README.md              # This file
@@ -252,15 +264,146 @@ import { ThemeToggle } from '@core/components';
 
 ## Theming
 
-The application supports three theme modes configured via CSS variables in `src/index.css`:
+The application supports a comprehensive theme system with multiple themes, each containing light and dark color schemes.
+
+### Available Themes
 
 | Theme | Description |
 |-------|-------------|
-| `light` | Light color scheme |
-| `dark` | Dark color scheme |
-| `system` | Follows OS preference |
+| `aristar` | Playful and colorful with bold shadows (default) |
+| `claude` | Warm, earthy tones inspired by Anthropic Claude |
+| `vercel` | Clean and minimal monochrome design |
+| `nature` | Calming forest greens and earthy tones |
 
-Theme is persisted in the Zustand store and applied via the `dark` class on `<html>`.
+### Theme Architecture
+
+Theme CSS variables are injected dynamically via JavaScript, allowing instant theme switching without page reload.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Theme Definition (e.g., aristar.ts)                    │
+│  ├── name: 'aristar'                                    │
+│  ├── displayName: 'Aristar'                             │
+│  ├── description: 'Playful and colorful...'             │
+│  ├── light: { --background: 'hsl(...)', ... }           │
+│  └── dark: { --background: 'hsl(...)', ... }            │
+└─────────────────────────────────────────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────────────────────────────┐
+│  useTheme() Hook                                        │
+│  ├── Reads themeName and colorScheme from store         │
+│  ├── Applies CSS variables to document.documentElement  │
+│  ├── Toggles 'dark' class based on color scheme         │
+│  └── Listens for system preference changes              │
+└─────────────────────────────────────────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────────────────────────────┐
+│  CSS (@theme inline in index.css)                       │
+│  ├── Maps --background to --color-background            │
+│  ├── Maps --primary to --color-primary                  │
+│  └── Tailwind uses --color-* variables                  │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Using the Theme Hook
+
+```typescript
+import { useTheme } from '@core/hooks';
+
+function MyComponent() {
+  const {
+    theme,              // Current ThemeDefinition
+    themeName,          // Current theme name
+    colorScheme,        // 'light' | 'dark' | 'system'
+    effectiveColorScheme, // Resolved to 'light' | 'dark'
+    themes,             // All available themes
+    setThemeName,       // Change theme
+    setColorScheme,     // Change color scheme
+    toggleColorScheme,  // Toggle light/dark
+  } = useTheme();
+
+  return (
+    <button onClick={() => setThemeName('claude')}>
+      Switch to Claude theme
+    </button>
+  );
+}
+```
+
+### Adding a New Theme
+
+1. Create a new theme file in `src/modules/core/lib/themes/`:
+
+```typescript
+// src/modules/core/lib/themes/my-theme.ts
+import type { ThemeDefinition } from '@/store/types';
+
+export const myTheme: ThemeDefinition = {
+  name: 'my-theme',
+  displayName: 'My Theme',
+  description: 'A custom theme description',
+  light: {
+    '--background': 'hsl(0 0% 100%)',
+    '--foreground': 'hsl(0 0% 0%)',
+    '--primary': 'hsl(220 90% 50%)',
+    // ... all required CSS variables
+  },
+  dark: {
+    '--background': 'hsl(0 0% 10%)',
+    '--foreground': 'hsl(0 0% 100%)',
+    '--primary': 'hsl(220 90% 60%)',
+    // ... all required CSS variables
+  },
+};
+```
+
+2. Register the theme in `src/modules/core/lib/themes/index.ts`:
+
+```typescript
+import { myTheme } from './my-theme';
+
+export const THEMES: ThemeDefinition[] = [
+  aristarTheme,
+  claudeTheme,
+  vercelTheme,
+  natureTheme,
+  myTheme,  // Add your theme
+];
+```
+
+### Required CSS Variables
+
+Each theme must define the following CSS variables for both light and dark schemes:
+
+**Colors:**
+- `--background`, `--foreground`
+- `--card`, `--card-foreground`
+- `--popover`, `--popover-foreground`
+- `--primary`, `--primary-foreground`
+- `--secondary`, `--secondary-foreground`
+- `--muted`, `--muted-foreground`
+- `--accent`, `--accent-foreground`
+- `--destructive`, `--destructive-foreground`
+- `--border`, `--input`, `--ring`
+- `--chart-1` through `--chart-5`
+- `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, etc.
+
+**Typography:**
+- `--font-sans`, `--font-serif`, `--font-mono`
+
+**Layout:**
+- `--radius`, `--spacing`, `--tracking-normal`
+
+**Shadows:**
+- `--shadow-2xs` through `--shadow-2xl`
+
+### Theme Persistence
+
+Theme settings are persisted via Zustand's persist middleware to localStorage:
+- `themeName`: The selected theme (e.g., 'aristar', 'claude')
+- `colorScheme`: The color scheme preference ('light', 'dark', 'system')
 
 ## Adding New UI Components
 

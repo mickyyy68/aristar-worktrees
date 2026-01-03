@@ -1,228 +1,260 @@
-# Frontend Module Reorganization Plan
-
-> **TL;DR**: Reorganize the frontend codebase (`src/`) into a modular structure with three main modules: `core` (shared utilities), `worktrees` (git worktree management), and `agent-manager` (AI agent orchestration). Each module has its own README.md files, `index.ts` for public exports, and feature-specific path aliases.
-
-## Status: COMPLETED
-
-**Completed on:** January 3, 2026
-
-### Verification Results
-- TypeScript: Compiles successfully
-- ESLint: Passes with no errors  
-- Rust tests: 54 passed
-- Frontend build: Successful
-
-## Related Plans
-
-- **[plan-2.md](./plan-2.md)** - Rust Backend Module Reorganization (can run in parallel)
-
-## Final Structure
-
-```
-src/
-├── modules/
-│   ├── core/
-│   │   ├── ui/                    # shadcn components (14 files)
-│   │   ├── lib/                   # utils, commands
-│   │   ├── components/            # Header, SettingsDialog, ThemeToggle
-│   │   └── index.ts
-│   │
-│   ├── worktrees/
-│   │   ├── components/            # WorktreeCard, CreateWorktreeDialog, etc.
-│   │   ├── lib/                   # branch-colors
-│   │   └── index.ts
-│   │
-│   └── agent-manager/
-│       ├── components/
-│       │   ├── chat/              # ChatView, ChatMessage, ChatInput
-│       │   └── tools/             # ToolCallDisplay, ToolsSection, tool-config
-│       ├── api/                   # opencode client, SSE handling
-│       ├── store/                 # agent-manager state
-│       └── index.ts
-│
-├── store/                         # Shared app store (use-app-store, types)
-├── assets/                        # Static assets
-├── App.tsx
-├── main.tsx
-└── index.css
-```
-
-### Path Aliases
-- `@core/*` -> `src/modules/core/*`
-- `@worktrees/*` -> `src/modules/worktrees/*`
-- `@agent-manager/*` -> `src/modules/agent-manager/*`
-- `@/*` -> `src/*` (unchanged)
-
+Theme Selection Implementation Plan
+Overview
+Implement a theme selection system in the Aristar Worktrees app with:
+- 5 built-in themes (Aristar, Claude, VS Code, Dracula, Nord)
+- Each theme has integrated light/dark color schemes
+- System preference detection for color scheme
+- Theme selection in Settings dialog with preview
+- Light/Dark toggle in header
 ---
-
-## Completed Phases
-
-### Phase 0: Preparation
-
-- [x] **0.1** Review `opencode-panel.tsx` usage - IS used in App.tsx
-- [x] **0.2** ~~If unused, delete~~ - CANCELLED (file is used, moved to agent-manager)
-- [x] **0.3** Create `plan.md` tracking document (this file)
-
+Phase 1: Type System & State Management
+1.1 Update src/store/types.ts
+- [ ] Add ThemeColorScheme type (Record<string, string>)
+- [ ] Add ThemeDefinition interface with name, displayName, description, light, dark
+- [ ] Add ColorScheme type: 'light' | 'dark' | 'system'
+- [ ] Update AppSettings interface:
+  - [ ] Replace theme: 'light' | 'dark' | 'system' with themeName: string
+  - [ ] Add colorScheme: ColorScheme
+- [ ] Update all imports/exports to include new types
+1.2 Update src/store/use-app-store.ts
+- [ ] Update defaultSettings to include:
+  - [ ] themeName: 'aristar'
+  - [ ] colorScheme: 'system'
+- [ ] Verify persistence includes new fields
+- [ ] Test that settings save/load correctly
+1.3 Update src-tauri/src/core/types.rs
+- [ ] Add theme_name: String field to AppSettings
+- [ ] Add color_scheme: String field to AppSettings
+- [ ] Update #[derive(Default)] implementation
+- [ ] Verify serde serialization/deserialization
 ---
-
-### Phase 1: Setup Module Structure
-
-#### 1.1 Create Folder Structure
-- [x] **1.1.1-1.1.16** All directories created under `src/modules/`
-
-#### 1.2 Configure Path Aliases
-- [x] **1.2.1-1.2.3** Updated `vite.config.ts` with @core, @worktrees, @agent-manager aliases
-- [x] **1.2.4-1.2.6** Updated `tsconfig.json` with path mappings
-- [x] **1.2.7-1.2.9** Updated `tsconfig.app.json` (extends tsconfig.json)
-
+Phase 2: Theme Registry & Data Files
+2.1 Create src/modules/core/lib/themes/index.ts
+- [ ] Create ThemeColorScheme type
+- [ ] Create ThemeDefinition interface
+- [ ] Import all theme modules
+- [ ] Create THEMES constant with all themes
+- [ ] Export ThemeName type
+- [ ] Export DEFAULT_THEME constant
+- [ ] Export DEFAULT_COLOR_SCHEME constant
+- [ ] Create helper function: getThemeByName(name: string): ThemeDefinition
+- [ ] Create helper function: getColorSchemeVars(theme, scheme): ThemeColorScheme
+2.2 Create src/modules/core/lib/themes/aristar.ts
+- [ ] Extract :root variables from current index.css into light object
+- [ ] Extract .dark variables from current index.css into dark object
+- [ ] Include all CSS variables: colors, fonts, radius, shadows, spacing, tracking
+- [ ] Ensure variable format: 'hsl(...)' or 'value' strings
+- [ ] Export with proper TypeScript typing
+2.3 Create src/modules/core/lib/themes/claude.ts
+- [ ] Convert provided Claude theme CSS to TypeScript object
+- [ ] Map :root variables to light object
+- [ ] Map .dark variables to dark object
+- [ ] Include all variables (colors, fonts, radius, shadows, etc.)
+- [ ] Export with proper TypeScript typing
+2.4 Create src/modules/core/lib/themes/vscode.ts
+- [ ] Research/create VS Code inspired color palette
+- [ ] Create light color scheme (blue accents, clean whites)
+- [ ] Create dark color scheme (dark background, blue accents)
+- [ ] Include all required CSS variables
+- [ ] Export with proper TypeScript typing
+2.5 Create src/modules/core/lib/themes/dracula.ts
+- [ ] Research/create Dracula-inspired color palette
+- [ ] Create light color scheme
+- [ ] Create dark color scheme
+- [ ] Include all required CSS variables
+- [ ] Export with proper TypeScript typing
+2.6 Create src/modules/core/lib/themes/nord.ts
+- [ ] Research/create Nord-inspired color palette
+- [ ] Create light color scheme
+- [ ] Create dark color scheme
+- [ ] Include all required CSS variables
+- [ ] Export with proper TypeScript typing
+2.7 Update src/modules/core/lib/index.ts
+- [ ] Re-export everything from ./themes/index.ts
+- [ ] Ensure clean public API
 ---
-
-### Phase 2: Core Module
-
-#### 2.1 Move UI Components
-- [x] **2.1.1-2.1.14** All UI components moved to `src/modules/core/ui/`
-- [x] **2.1.15** Created `src/modules/core/ui/index.ts`
-
-#### 2.2 Move Core Lib
-- [x] **2.2.1-2.2.2** Moved utils.ts and commands.ts
-- [x] **2.2.3** Created `src/modules/core/lib/index.ts`
-
-#### 2.3 Setup Core Store
-- [x] **2.3.1-2.3.3** DEFERRED - Store remains in `src/store/` for now (shared between modules)
-
-#### 2.4 Move Core Components
-- [x] **2.4.1-2.4.3** Moved header.tsx, settings-dialog.tsx, theme-toggle.tsx
-- [x] **2.4.4** Created `src/modules/core/components/index.ts`
-
-#### 2.5 Core Module Index & Documentation
-- [x] **2.5.1** Created `src/modules/core/index.ts`
-- [ ] **2.5.2** Create `src/modules/core/README.md` - PENDING
-- [ ] **2.5.3** Create `src/modules/core/ui/README.md` - PENDING
-
-#### 2.6 Update Core Imports
-- [x] **2.6.1-2.6.3** All imports updated to use relative/module paths
-
+Phase 3: Theme Hook
+3.1 Create src/modules/core/hooks/use-theme.ts
+- [ ] Create useTheme() hook function
+- [ ] Import useAppStore for settings access
+- [ ] Import THEMES for theme data
+- [ ] Implement theme variable application:
+  - [ ] Get current theme by themeName
+  - [ ] Get color scheme vars based on colorScheme + system preference
+  - [ ] Apply variables to document.documentElement.style
+- [ ] Implement dark mode class:
+  - [ ] Detect if should be dark (explicit 'dark' or 'system' + OS preference)
+  - [ ] Toggle dark class on document.documentElement
+- [ ] Implement system preference listener:
+  - [ ] Add matchMedia('prefers-color-scheme') listener
+  - [ ] Update dark mode when system changes (only if colorScheme === 'system')
+  - [ ] Cleanup listener on unmount
+- [ ] Return helper functions:
+  - [ ] theme (current ThemeDefinition)
+  - [ ] themeName (current theme name)
+  - [ ] colorScheme (current scheme)
+  - [ ] setThemeName(name: string)
+  - [ ] setColorScheme(scheme: ColorScheme)
+  - [ ] toggleColorScheme()
+- [ ] Add JSDoc documentation
 ---
-
-### Phase 3: Worktrees Module
-
-#### 3.1 Move Worktree Components
-- [x] **3.1.1-3.1.4** All components moved
-- [x] **3.1.5** Created `src/modules/worktrees/components/index.ts`
-
-#### 3.2 Move Worktree Lib
-- [x] **3.2.1** Moved branch-colors.ts
-- [x] **3.2.2** Created `src/modules/worktrees/lib/index.ts`
-
-#### 3.3 Setup Worktree Store
-- [x] **3.3.1-3.3.3** DEFERRED - Worktree state remains in shared `src/store/use-app-store.ts`
-
-#### 3.4 Worktree Module Index & Documentation
-- [x] **3.4.1** Created `src/modules/worktrees/index.ts`
-- [ ] **3.4.2-3.4.3** README files - PENDING
-
-#### 3.5 Update Worktree Imports
-- [x] **3.5.1-3.5.3** All imports updated
-
+Phase 4: CSS Architecture Refactor
+4.1 Update src/index.css
+- [ ] Keep @import "tailwindcss" directive
+- [ ] Keep @custom-variant dark directive
+- [ ] Move static CSS variables from :root to new section:
+  - [ ] Font families (sans, serif, mono)
+  - [ ] Radius base value
+  - [ ] Tracking normal
+  - [ ] Spacing base
+- [ ] Remove all theme-specific color/shadow variables (they'll be injected by JS)
+- [ ] Keep @theme inline with CSS variable mappings (unchanged)
+- [ ] Keep @layer base styles (unchanged)
+- [ ] Keep @layer utilities for font classes (unchanged)
+- [ ] Add comment explaining theme injection mechanism
+4.2 Verify Tailwind integration
+- [ ] Ensure all --color-* variables still map to Tailwind classes
+- [ ] Test that bg-background, text-foreground, etc. still work
+- [ ] Test that dark mode classes work correctly
 ---
-
-### Phase 4: Agent Manager Module
-
-#### 4.1 Move Agent Manager API
-- [x] **4.1.1-4.1.3** Moved opencode.ts, use-agent-sse.ts, created index.ts
-
-#### 4.2 Move Agent Manager Store
-- [x] **4.2.1-4.2.4** Moved types.ts, agent-manager-store.ts, created index.ts
-
-#### 4.3 Move Agent Manager Chat Components
-- [x] **4.3.1-4.3.4** All chat components moved with index.ts
-
-#### 4.4 Move Agent Manager Tool Components
-- [x] **4.4.1-4.4.4** All tool components moved with index.ts
-
-#### 4.5 Move Agent Manager Other Components
-- [x] **4.5.1-4.5.11** All components moved including opencode-panel.tsx
-
-#### 4.6 Agent Manager Module Index & Documentation
-- [x] **4.6.1** Created `src/modules/agent-manager/index.ts`
-- [ ] **4.6.2-4.6.6** README files - PENDING
-
-#### 4.7 Update Agent Manager Imports
-- [x] **4.7.1-4.7.5** All imports updated
-
+Phase 5: Theme UI Components
+5.1 Create src/modules/core/components/theme-preview.tsx
+- [ ] Create ThemePreviewProps interface
+- [ ] Accept theme: ThemeDefinition and colorScheme: 'light' | 'dark'
+- [ ] Create preview card layout:
+  - [ ] Header showing theme name
+  - [ ] Color swatch showing primary color
+  - [ ] Color swatch showing background
+  - [ ] Color swatch showing accent
+  - [ ] Optional: small sample text
+- [ ] Style with current theme's colors (inline styles for preview)
+- [ ] Add responsive design (works on mobile)
+5.2 Create src/modules/core/components/theme-selector.tsx
+- [ ] Create ThemeSelectorProps interface
+- [ ] Accept value: string and onValueChange: (value: string) => void
+- [ ] Use Select component from @core/ui/select
+- [ ] Render all themes from THEMES registry
+- [ ] Display theme displayName in each option
+- [ ] Add optional description tooltip or subtitle
+- [ ] Add AppIcon if themes have icons (optional)
+5.3 Create src/modules/core/components/color-scheme-toggle.tsx
+- [ ] Create ColorSchemeToggleProps interface
+- [ ] Accept value: 'light' | 'dark' | 'system' and onChange
+- [ ] Create segmented control or toggle group
+- [ ] Use sun icon for light, moon icon for dark, computer icon for system
+- [ ] Add accessible labels for each option
+- [ ] Style to match app aesthetics
+5.4 Update src/modules/core/components/theme-toggle.tsx
+- [ ] Keep existing light/dark toggle functionality
+- [ ] Import useTheme hook
+- [ ] Update to use colorScheme from store instead of theme
+- [ ] Keep dropdown menu with three options:
+  - [ ] Light (sun icon)
+  - [ ] Dark (moon icon)
+  - [ ] System (computer icon)
+- [ ] On selection, call setColorScheme()
+- [ ] Update icon rotation transitions if desired
+- [ ] Ensure proper TypeScript typing
 ---
-
-### Phase 5: Update App Entry Points
-
-#### 5.1 Update App.tsx
-- [x] **5.1.1-5.1.2** All imports updated to use new module paths
-
-#### 5.2 Update main.tsx
-- [x] **5.2.1** No changes needed
-
+Phase 6: Settings Dialog Integration
+6.1 Update src/modules/core/components/settings-dialog.tsx
+- [ ] Add imports for new theme components
+- [ ] Add local state for themeName (sync with store on dialog open)
+- [ ] Add local state for colorScheme (sync with store on dialog open)
+- [ ] Update handleSave() to include new theme settings
+- [ ] Add new "Theme" section in the dialog:
+  - [ ] Section header with 🎨 emoji and "Theme" label
+  - [ ] Theme selector dropdown
+  - [ ] Color scheme toggle (light/dark/system)
+  - [ ] Theme preview card
+- [ ] Add separator above and below theme section
+- [ ] Ensure proper spacing and layout
+- [ ] Add descriptions/helper text if needed
+6.2 Test settings persistence
+- [ ] Open settings, change theme, save, close, reopen - verify persistence
+- [ ] Change color scheme, verify it applies immediately
+- [ ] Test system preference detection
+- [ ] Verify no console errors
 ---
-
-### Phase 6: Cleanup Old Structure
-
-#### 6.1 Remove Old Directories
-- [x] **6.1.1-6.1.5** Deleted src/components/ui/, src/components/agent-manager/, src/components/, src/lib/, src/store/types/
-
-#### 6.2 Remove Old Store File
-- [x] **6.2.1-6.2.2** DEFERRED - src/store/ kept with use-app-store.ts and types.ts (shared state)
-
+Phase 7: Testing & Polish
+7.1 Test all themes
+- [ ] Test Aristar theme light/dark switching
+- [ ] Test Claude theme light/dark switching
+- [ ] Test VS Code theme light/dark switching
+- [ ] Test Dracula theme light/dark switching
+- [ ] Test Nord theme light/dark switching
+- [ ] Verify all CSS variables are applied correctly
+7.2 Test system preference
+- [ ] Set color scheme to "system"
+- [ ] Change OS light/dark mode
+- [ ] Verify app updates accordingly
+- [ ] Test on both macOS light and dark modes
+7.3 Test settings dialog
+- [ ] Verify theme preview shows correct colors
+- [ ] Verify theme selector shows all themes
+- [ ] Verify color scheme toggle works
+- [ ] Test cancel button - settings should not change
+- [ ] Test save button - settings should persist
+7.4 Test header theme toggle
+- [ ] Click toggle, select light/dark
+- [ ] Verify icon updates correctly
+- [ ] Verify theme applies immediately
+- [ ] Test system option if implemented
+7.5 Run linting & typechecking
+- [ ] Run bun run lint
+- [ ] Run bun run tsc
+- [ ] Fix any errors or warnings
 ---
-
-### Phase 7: Verification & Testing
-
-#### 7.1 Type Checking
-- [x] **7.1.1** `bun run tsc` - passes
-- [x] **7.1.2** No unused imports/exports
-
-#### 7.2 Linting
-- [x] **7.2.1** `bun run lint` - passes
-- [x] **7.2.2** Import order verified
-
-#### 7.3 Runtime Testing
-- [ ] **7.3.1-7.3.10** Manual testing - PENDING (requires `bun run tauri dev`)
-
-#### 7.4 Rust Backend
-- [x] **7.4.1** `cargo test` - 54 tests passed
-- [x] **7.4.2** `cargo check` - passes
-
+Phase 8: Documentation
+8.1 Update src/modules/core/README.md
+- [ ] Document new theme architecture
+- [ ] Document how to add new themes
+- [ ] Document theme file structure
+- [ ] Add examples for theme definition
+- [ ] Document CSS variable requirements
+8.2 Update AGENTS.md
+- [ ] Update build commands if needed
+- [ ] Document new project structure
+- [ ] Add theme-related commands if any
 ---
-
-### Phase 8: Documentation Updates
-
-- [x] **8.1.1-8.1.4** Update ARCHITECTURE.md - COMPLETED
-- [x] **8.2.1-8.2.3** Update AGENTS.md - COMPLETED
-- [x] **8.3.1-8.3.6** Rust documentation - N/A (covered in plan-2.md)
-
+Phase 9: Additional Themes (Optional, Later)
+9.1 Create src/modules/core/lib/themes/github.ts
+- [ ] GitHub light/dark inspired theme
+- [ ] Export with proper typing
+9.2 Create src/modules/core/lib/themes/catppuccin.ts
+- [ ] Catppuccin-inspired theme
+- [ ] Export with proper typing
 ---
-
-### Phase 9: Final Review
-
-- [x] **9.1** Index.ts exports verified
-- [x] **9.2** Path aliases work correctly
-- [x] **9.3** `bun run build` - successful
-- [ ] **9.4** `bun run tauri build` - PENDING (optional)
-- [ ] **9.5** Delete/archive this plan.md - PENDING
-
+File Summary
+| File | Action | Lines (est.) |
+|------|--------|--------------|
+| src/store/types.ts | Modify | +20 |
+| src/store/use-app-store.ts | Modify | +5 |
+| src-tauri/src/core/types.rs | Modify | +5 |
+| src/modules/core/lib/themes/index.ts | Create | ~80 |
+| src/modules/core/lib/themes/aristar.ts | Create | ~120 |
+| src/modules/core/lib/themes/claude.ts | Create | ~120 |
+| src/modules/core/lib/themes/vscode.ts | Create | ~120 |
+| src/modules/core/lib/themes/dracula.ts | Create | ~120 |
+| src/modules/core/lib/themes/nord.ts | Create | ~120 |
+| src/modules/core/lib/index.ts | Modify | +5 |
+| src/modules/core/hooks/use-theme.ts | Create | ~100 |
+| src/index.css | Modify | -50 |
+| src/modules/core/components/theme-preview.tsx | Create | ~60 |
+| src/modules/core/components/theme-selector.tsx | Create | ~40 |
+| src/modules/core/components/color-scheme-toggle.tsx | Create | ~50 |
+| src/modules/core/components/theme-toggle.tsx | Modify | +20 |
+| src/modules/core/components/settings-dialog.tsx | Modify | +60 |
+| src/modules/core/README.md | Modify | +50 |
 ---
-
-## Notes
-
-- **Store splitting deferred**: The original plan called for splitting the store into module-specific stores. This was deferred as the current shared store (`src/store/use-app-store.ts`) works well and avoids complexity. Types are re-exported from `src/store/types.ts` for backwards compatibility.
-- **README files pending**: Module README documentation is pending but not blocking.
-- **opencode-panel.tsx**: Was marked for potential deletion but is actively used; moved to agent-manager module.
-
-## Deviations from Original Plan
-
-1. **Store architecture**: Kept shared store in `src/store/` rather than splitting into module stores
-2. **Types location**: `src/store/types.ts` re-exports agent-manager types for backwards compatibility
-3. **opencode-panel.tsx**: Moved to agent-manager instead of deleted
-
+Dependencies
+- No new npm packages required
+- Uses existing zustand, lucide-react, Tailwind CSS v4
+- Uses existing UI components (Select, Button, etc.)
 ---
-
-## Related Work
-
-After completing this frontend reorganization, proceed to **[plan-2.md](./plan-2.md)** for the Rust backend reorganization. Both plans can be executed in parallel by different engineers, but should be coordinated to ensure the app remains functional throughout the process.
+Notes for Implementation
+1. CSS Variable Injection: Theme variables are applied via JavaScript to document.documentElement.style. This allows instant theme switching without page reload.
+2. Shadow Variables: Each theme defines its own shadow variables (e.g., --shadow-sm, --shadow-md). This is why shadows look different between Aristar and Claude.
+3. Font Variables: Font families can be theme-specific or shared. Currently shared in base CSS, but could be per-theme if needed.
+4. Color Scheme Detection: When colorScheme === 'system', the app listens to prefers-color-scheme media query and automatically switches between light/dark of the selected theme.
+5. Persistence: Both themeName and colorScheme are persisted via Zustand's persist middleware to localStorage.

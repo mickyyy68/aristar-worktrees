@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, Monitor } from 'lucide-react';
 import { Button } from '@core/ui/button';
 import {
   DropdownMenu,
@@ -7,29 +7,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@core/ui/dropdown-menu';
-import { useAppStore } from '@/store/use-app-store';
+import { useTheme } from '@core/hooks/use-theme';
 
 export function ThemeToggle() {
-  const { settings, setSettings } = useAppStore();
+  const { colorScheme, setColorScheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const isDark = settings.theme === 'dark' || 
-      (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    document.documentElement.classList.toggle('dark', isDark);
-  }, [settings.theme]);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e: MediaQueryListEvent) => {
-      if (settings.theme === 'system') {
-        document.documentElement.classList.toggle('dark', e.matches);
-      }
-    };
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [settings.theme]);
+  }, []);
 
   if (!mounted) {
     return <Button variant="ghost" size="icon" disabled />;
@@ -44,14 +30,20 @@ export function ThemeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setSettings({ theme: 'light' })}>
+        <DropdownMenuItem onClick={() => setColorScheme('light')}>
+          <Sun className="mr-2 h-4 w-4" />
           Light
+          {colorScheme === 'light' && <span className="ml-auto">&#10003;</span>}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setSettings({ theme: 'dark' })}>
+        <DropdownMenuItem onClick={() => setColorScheme('dark')}>
+          <Moon className="mr-2 h-4 w-4" />
           Dark
+          {colorScheme === 'dark' && <span className="ml-auto">&#10003;</span>}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setSettings({ theme: 'system' })}>
+        <DropdownMenuItem onClick={() => setColorScheme('system')}>
+          <Monitor className="mr-2 h-4 w-4" />
           System
+          {colorScheme === 'system' && <span className="ml-auto">&#10003;</span>}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

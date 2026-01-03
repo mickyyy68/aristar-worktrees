@@ -9,3 +9,6 @@ export * from './lib';
 
 // Core components
 export * from './components';
+
+// Hooks
+export * from './hooks';

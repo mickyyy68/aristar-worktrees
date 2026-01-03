@@ -24,7 +24,11 @@ import { Separator } from '@core/ui/separator';
 import { AppIcon } from '@core/ui/app-icon';
 import { Switch } from '@core/ui/switch';
 import { useAppStore } from '@/store/use-app-store';
-import type { TerminalApp, EditorApp, ToolOutputVisibility } from '@/store/types';
+import type { TerminalApp, EditorApp, ToolOutputVisibility, ColorScheme } from '@/store/types';
+import { getThemeByName, getEffectiveColorScheme } from '@core/lib/themes';
+import { ThemeSelector } from './theme-selector';
+import { ColorSchemeToggle } from './color-scheme-toggle';
+import { ThemePreview } from './theme-preview';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -33,6 +37,10 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const { settings, setSettings } = useAppStore();
+
+  // Theme settings
+  const [themeName, setThemeName] = useState(settings.themeName);
+  const [colorScheme, setColorScheme] = useState<ColorScheme>(settings.colorScheme);
 
   // Local state for form
   const [terminalApp, setTerminalApp] = useState<TerminalApp>(settings.terminalApp);
@@ -48,6 +56,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   // Sync with store when dialog opens
   useEffect(() => {
     if (open) {
+      setThemeName(settings.themeName);
+      setColorScheme(settings.colorScheme);
       setTerminalApp(settings.terminalApp);
       setCustomTerminalCommand(settings.customTerminalCommand || '');
       setEditorApp(settings.editorApp);
@@ -60,6 +70,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   const handleSave = () => {
     setSettings({
+      themeName,
+      colorScheme,
       terminalApp,
       customTerminalCommand: terminalApp === 'custom' ? customTerminalCommand : undefined,
       editorApp,
@@ -73,6 +85,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     });
     onOpenChange(false);
   };
+
+  // Get preview theme and color scheme
+  const previewTheme = getThemeByName(themeName);
+  const previewColorScheme = getEffectiveColorScheme(colorScheme);
 
   const outputVisibilityOptions = [
     { value: 'hidden', label: 'Hidden', description: 'Click to show output' },
@@ -112,7 +128,34 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-6 py-4 max-h-[60vh] overflow-y-auto">
+          {/* Theme Section */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🎨</span>
+              <h3 className="font-medium">Theme</h3>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="theme">Theme</Label>
+                <ThemeSelector value={themeName} onValueChange={setThemeName} />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Color Scheme</Label>
+                <ColorSchemeToggle value={colorScheme} onChange={setColorScheme} />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Preview</Label>
+                <ThemePreview theme={previewTheme} colorScheme={previewColorScheme} />
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
           {/* Terminal Section */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">

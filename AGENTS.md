@@ -1,3 +1,5 @@
+This is a very lengthy task. It's recommended that you make full use of the complete output context to handle it—keep the total input and output tokens within 200k tokens. Make full use of the context window length to complete the task thoroughly and avoid exhausting tokens.
+
 # AGENTS.md - Coding Agent Guidelines
 
 This document provides guidelines for AI coding agents working on the Aristar Worktrees codebase.
