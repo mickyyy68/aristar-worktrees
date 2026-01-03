@@ -374,7 +374,6 @@ class OpenCodeClient {
     });
 
     console.log('[OpenCodeClient] Transformed providers:', providers.length, 'providers');
-    providers.forEach(p => console.log(`  - ${p.name}: ${p.models.length} models`));
 
     return {
       providers,
@@ -416,12 +415,23 @@ class OpenCodeClient {
     const data = await response.json();
     console.log('[OpenCodeClient] getAgents raw response:', JSON.stringify(data, null, 2));
 
-    const agents = data.map((a: any) => ({
-      id: a.id,
-      name: a.name || a.id,
-      description: a.description || '',
-      mode: a.mode || 'all',
-    }));
+    const agents = data.map((a: any) => {
+      const id = a.id;
+      const name = a.name || a.id || 'Unknown';
+      const description = a.description || '';
+      const mode = a.mode || 'all';
+
+      if (!id) {
+        console.debug('[OpenCodeClient] Agent missing id, using name as fallback:', { name, id });
+      }
+
+      return {
+        id: id || name,
+        name,
+        description,
+        mode,
+      };
+    });
 
     console.log('[OpenCodeClient] Transformed agents:', agents.length, 'agents');
 

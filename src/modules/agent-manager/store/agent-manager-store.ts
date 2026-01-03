@@ -795,7 +795,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           const agents = await opencodeClient.getAgents();
           // Map to OpenCodeAgentConfig format
           const agentConfigs: OpenCodeAgentConfig[] = agents.map(a => ({
-            id: a.id,
+            id: a.id || a.name,
             name: a.name,
             description: a.description,
             mode: a.mode,
@@ -829,7 +829,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           const agents = await opencodeClient.getAgents();
           
           const agentConfigs: OpenCodeAgentConfig[] = agents.map(a => ({
-            id: a.id,
+            id: a.id || a.name,
             name: a.name,
             description: a.description,
             mode: a.mode,

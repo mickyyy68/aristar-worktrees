@@ -63,18 +63,18 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
   // Load providers when dialog opens and we have a selected repo
   const loadOpenCodeData = useCallback(async () => {
     if (!selectedRepo) return;
-    
+
     setLoadingProviders(true);
     try {
       // Start a temporary OpenCode server to fetch providers/agents
       const port = await commands.startOpencode(selectedRepo.path);
       opencodeClient.connect(port);
-      
+
       // Load providers and agents - they now return the data directly
       await loadProviders(port);
       const agents = await loadAvailableAgents(port);
-      
-      // Set default agent type using the returned value (fixes race condition)
+
+      // Always set default to first valid agent (agentType was reset to '' on dialog open)
       if (agents.length > 0 && !agentType) {
         // Find 'coder' or use first available
         const defaultAgent = agents.find(a => a.id === 'coder') || agents[0];
@@ -91,14 +91,14 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     } finally {
       setLoadingProviders(false);
     }
-  }, [selectedRepo, loadProviders, loadAvailableAgents, agentType]);
+  }, [selectedRepo, loadProviders, loadAvailableAgents]);
 
   useEffect(() => {
-    // Only load if dialog is open, we have a repo, and we don't have providers yet
-    if (open && selectedRepo && providers.length === 0) {
+    // Always load when dialog opens with a selected repo to get fresh data
+    if (open && selectedRepo) {
       loadOpenCodeData();
     }
-  }, [open, selectedRepo, providers.length, loadOpenCodeData]);
+  }, [open, selectedRepo, loadOpenCodeData]);
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -109,6 +109,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
       setSelectedBranch('');
       setSelectedCommit(null);
       setSelectedModels([]);
+      setAgentType('');
       setError(null);
     }
   }, [open]);
@@ -125,6 +126,10 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     }
     if (!name.trim()) {
       setError('Please enter a task name');
+      return;
+    }
+    if (!agentType || !availableAgents.some(a => a.id === agentType)) {
+      setError('Please select a valid agent type');
       return;
     }
     if (selectedModels.length === 0) {
@@ -158,7 +163,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
         sourceBranch,
         sourceCommit,
         sourceRepoPath: selectedRepo.path,
-        agentType: agentType || 'coder',
+        agentType: agentType,
         models: selectedModels,
       });
 
@@ -315,6 +320,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
             disabled={
               loading ||
               !name.trim() ||
+              !agentType ||
               selectedModels.length === 0 ||
               !prompt.trim() ||
               !selectedRepo
