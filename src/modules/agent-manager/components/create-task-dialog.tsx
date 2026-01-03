@@ -91,7 +91,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     } finally {
       setLoadingProviders(false);
     }
-  }, [selectedRepo, loadProviders, loadAvailableAgents]);
+  }, [selectedRepo, loadProviders, loadAvailableAgents, agentType]);
 
   useEffect(() => {
     // Always load when dialog opens with a selected repo to get fresh data
