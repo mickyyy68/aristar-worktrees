@@ -178,7 +178,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
+      <DialogContent className="max-h-[90vh] overflow-x-hidden overflow-y-auto sm:max-w-[800px]">
         <DialogHeader>
           <DialogTitle>Create New Task</DialogTitle>
           <DialogDescription>
@@ -186,10 +186,10 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="min-w-0 space-y-6 overflow-hidden py-4">
           {/* Repository selector (if multiple repos) */}
           {repositories.length > 1 && (
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label>Repository</Label>
               <Select
                 value={selectedRepositoryId || ''}
@@ -210,7 +210,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
           )}
 
           {/* Task name */}
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <Label htmlFor="task-name">Task Name</Label>
             <Input
               id="task-name"
@@ -234,7 +234,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
           )}
 
           {/* Agent type selector */}
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <Label>Agent Type</Label>
             <AgentTypeSelector
               agents={availableAgents}
@@ -245,7 +245,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
           </div>
 
           {/* Model selector */}
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <div className="flex items-center justify-between">
               <Label>Models</Label>
               <Button
@@ -270,15 +270,17 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
               onChange={setSelectedModels}
               isLoading={loadingProviders || isLoadingOpenCodeData}
             />
-            <SelectedModelsList
-              providers={providers}
-              selectedModels={selectedModels}
-              onRemove={handleRemoveModel}
-            />
+            <div className="min-w-0">
+              <SelectedModelsList
+                providers={providers}
+                selectedModels={selectedModels}
+                onRemove={handleRemoveModel}
+              />
+            </div>
           </div>
 
           {/* Initial prompt */}
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <Label htmlFor="prompt">Initial Prompt</Label>
             <Textarea
               id="prompt"

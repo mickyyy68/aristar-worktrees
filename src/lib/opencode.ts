@@ -323,11 +323,14 @@ class OpenCodeClient {
   }
 
   /**
-   * Get available providers and their models
-   * Endpoint: GET /config/providers
+   * Get available providers and their models (including custom ones)
+   * Endpoint: GET /provider
+   * 
+   * Note: We use /provider instead of /config/providers because /provider
+   * returns ALL providers including custom ones defined in opencode.json
    */
   async getProviders(): Promise<{ providers: OpenCodeProvider[]; default: Record<string, string> }> {
-    const url = `${this.getBaseUrl()}/config/providers`;
+    const url = `${this.getBaseUrl()}/provider`;
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -337,9 +340,12 @@ class OpenCodeClient {
     const data = await response.json();
     console.log('[OpenCodeClient] getProviders raw response:', JSON.stringify(data, null, 2));
 
+    // The /provider endpoint returns { all: Provider[], default: {...}, connected: string[] }
+    const rawProviders = data.all || data.providers || [];
+    
     // Transform the API response to our format
     // Handle both array and object formats for models
-    const providers: OpenCodeProvider[] = (data.providers || []).map((p: any) => {
+    const providers: OpenCodeProvider[] = rawProviders.map((p: any) => {
       // models can be an array or an object (map of model id -> model info)
       let models: OpenCodeModel[] = [];
       
@@ -425,12 +431,12 @@ class OpenCodeClient {
    * Send prompt with model and agent options
    * Endpoint: POST /session/:id/message
    *
-   * Note: model is a single string "provider/model-id" format
+   * Note: model should be in format "provider/model-id", will be split into providerID and modelID
    */
   async sendPromptWithOptions(
     prompt: string,
     options: {
-      model?: string; // e.g., "anthropic/claude-sonnet-4"
+      model?: string; // Format: "provider/model-id"
       agent?: string;
     }
   ): Promise<OpenCodeMessage> {
@@ -443,8 +449,11 @@ class OpenCodeClient {
       parts: [{ type: 'text', text: prompt }],
     };
 
+    // Model should be an object with providerID and modelID
     if (options.model) {
-      body.model = options.model;
+      const [providerID, ...modelParts] = options.model.split('/');
+      const modelID = modelParts.join('/'); // Handle model IDs that contain slashes
+      body.model = { providerID, modelID };
     }
 
     if (options.agent) {
@@ -478,11 +487,13 @@ class OpenCodeClient {
   /**
    * Send prompt asynchronously (returns immediately, no wait for response)
    * Endpoint: POST /session/:id/prompt_async
+   * 
+   * Note: model should be in format "provider/model-id", will be split into providerID and modelID
    */
   async sendPromptAsync(
     prompt: string,
     options?: {
-      model?: string;
+      model?: string;  // Format: "provider/model-id"
       agent?: string;
     }
   ): Promise<void> {
@@ -495,13 +506,18 @@ class OpenCodeClient {
       parts: [{ type: 'text', text: prompt }],
     };
 
+    // Model should be an object with providerID and modelID
     if (options?.model) {
-      body.model = options.model;
+      const [providerID, ...modelParts] = options.model.split('/');
+      const modelID = modelParts.join('/'); // Handle model IDs that contain slashes
+      body.model = { providerID, modelID };
     }
 
     if (options?.agent) {
       body.agent = options.agent;
     }
+
+    console.log('[OpenCodeClient] sendPromptAsync body:', JSON.stringify(body, null, 2));
 
     const response = await fetch(url, {
       method: 'POST',
@@ -510,6 +526,8 @@ class OpenCodeClient {
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[OpenCodeClient] sendPromptAsync error:', errorText);
       throw new Error(`Failed to send async prompt: ${response.statusText}`);
     }
     // Returns 204 No Content on success

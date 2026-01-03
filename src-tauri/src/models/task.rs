@@ -32,6 +32,7 @@ pub enum AgentStatus {
 /// Represents one AI model/agent working on a task.
 /// Each agent has its own worktree and OpenCode session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskAgent {
     /// Unique ID within task (e.g., "agent-1")
     pub id: String,
@@ -56,6 +57,7 @@ pub struct TaskAgent {
 /// A task represents a goal/prompt with multiple agents working on it.
 /// Each task has its own folder with agent worktrees inside.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Task {
     /// Unique 8-char hash (e.g., "a1b2c3d4")
     pub id: String,
@@ -83,6 +85,7 @@ pub struct Task {
 
 /// Model selection for creating agents
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelSelection {
     pub provider_id: String,
     pub model_id: String,

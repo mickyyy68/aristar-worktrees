@@ -325,8 +325,12 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
             agentOpencodePorts: { ...state.agentOpencodePorts, [agentId]: port },
           }));
 
-          // Connect to the server
+          // Connect to the server and wait for it to be ready
           opencodeClient.connect(port);
+          const isReady = await opencodeClient.waitForReady();
+          if (!isReady) {
+            throw new Error('OpenCode server did not become ready');
+          }
 
           // Create or get session
           const sessions = await opencodeClient.listSessions();
