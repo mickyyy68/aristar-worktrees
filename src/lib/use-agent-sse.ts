@@ -161,14 +161,15 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
         if (!streamingMessageRef.current && part.messageID) {
           console.log('[SSE] message.part.updated - no streaming message, looking for existing');
           const existingMessages = useAgentManagerStore.getState().agentMessages[agentId] || [];
-          const existingMessage = existingMessages.find(m => m.id === part.messageID);
+          const existingMessage = existingMessages.find(m => m.id === part.messageID) as StreamingMessage | undefined;
           if (existingMessage) {
+            // Preserve existing parts when recovering the streaming ref
             streamingMessageRef.current = {
               ...existingMessage,
-              parts: [],
+              parts: existingMessage.parts || [],
               isStreaming: true,
             } as StreamingMessage;
-            console.log('[SSE] message.part.updated - created streaming ref from existing message');
+            console.log('[SSE] message.part.updated - created streaming ref from existing message, parts:', streamingMessageRef.current.parts.length);
           } else {
             // Don't create a new message here - wait for message.updated event
             // This prevents user message parts from creating fake "assistant" messages

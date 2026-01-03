@@ -60,9 +60,15 @@ cargo clippy
 src/                     # React frontend (TypeScript)
 ├── components/          # React components
 │   ├── ui/              # shadcn/ui base components (don't modify)
+│   ├── agent-manager/   # Agent Manager feature components
+│   │   ├── tool-config.ts        # Tool icons/colors configuration
+│   │   ├── tool-call-display.tsx # Individual tool display
+│   │   ├── tools-section.tsx     # Tool grouping wrapper
+│   │   └── *.tsx                 # Other agent manager components
 │   └── *.tsx            # App components
 ├── lib/                 # Utilities and helpers
 ├── store/               # Zustand state management
+│   └── types/           # Type definitions by feature
 └── assets/              # Static assets
 
 src-tauri/src/           # Rust backend

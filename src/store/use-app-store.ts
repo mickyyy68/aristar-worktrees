@@ -69,6 +69,12 @@ const defaultSettings: AppSettings = {
   autoRefresh: true,
   terminalApp: 'terminal',
   editorApp: 'vscode',
+  toolDisplay: {
+    expandToolsByDefault: false,
+    showToolCommands: false,
+    outputVisibility: 'hidden',
+    truncatedOutputLines: 10,
+  },
 };
 
 export const useAppStore = create<AppState>()(

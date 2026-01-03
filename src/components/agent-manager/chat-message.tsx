@@ -1,6 +1,6 @@
 import { User, Bot } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
-import { ToolCallDisplay } from '@/components/agent-manager/tool-call-display';
+import { ToolsSection } from '@/components/agent-manager/tools-section';
 import { cn } from '@/lib/utils';
 import type { OpenCodeMessage } from '@/lib/opencode';
 import type { MessagePart, ToolInvocationPart } from '@/store/types';
@@ -69,9 +69,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
           ) : (
             <>
               <MarkdownRenderer content={message.content} />
-              {toolCalls.map((toolCall, index) => (
-                <ToolCallDisplay key={index} toolCall={toolCall} />
-              ))}
+              {toolCalls.length > 0 && <ToolsSection toolCalls={toolCalls} />}
             </>
           )}
         </div>

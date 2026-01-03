@@ -33,6 +33,19 @@ export interface CreateWorktreeRequest {
 export type TerminalApp = 'terminal' | 'ghostty' | 'alacritty' | 'kitty' | 'iterm' | 'warp' | 'custom';
 export type EditorApp = 'vscode' | 'cursor' | 'zed' | 'antigravity' | 'custom';
 
+export type ToolOutputVisibility = 'hidden' | 'truncated' | 'always';
+
+export interface ToolDisplaySettings {
+  /** Whether tools are expanded by default */
+  expandToolsByDefault: boolean;
+  /** Whether to show full command/args alongside description */
+  showToolCommands: boolean;
+  /** Output visibility mode */
+  outputVisibility: ToolOutputVisibility;
+  /** Max lines when output is truncated */
+  truncatedOutputLines: number;
+}
+
 export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
   defaultBasePath?: string;
@@ -41,6 +54,8 @@ export interface AppSettings {
   customTerminalCommand?: string;
   editorApp: EditorApp;
   customEditorCommand?: string;
+  /** Tool display settings for Agent Manager */
+  toolDisplay: ToolDisplaySettings;
 }
 
 export interface StoreData {

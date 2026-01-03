@@ -22,8 +22,9 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { AppIcon } from '@/components/ui/app-icon';
+import { Switch } from '@/components/ui/switch';
 import { useAppStore } from '@/store/use-app-store';
-import type { TerminalApp, EditorApp } from '@/store/types';
+import type { TerminalApp, EditorApp, ToolOutputVisibility } from '@/store/types';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -39,6 +40,11 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [editorApp, setEditorApp] = useState<EditorApp>(settings.editorApp);
   const [customEditorCommand, setCustomEditorCommand] = useState(settings.customEditorCommand || '');
 
+  // Tool display settings
+  const [expandToolsByDefault, setExpandToolsByDefault] = useState(settings.toolDisplay?.expandToolsByDefault ?? false);
+  const [showToolCommands, setShowToolCommands] = useState(settings.toolDisplay?.showToolCommands ?? false);
+  const [outputVisibility, setOutputVisibility] = useState<ToolOutputVisibility>(settings.toolDisplay?.outputVisibility ?? 'hidden');
+
   // Sync with store when dialog opens
   useEffect(() => {
     if (open) {
@@ -46,6 +52,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       setCustomTerminalCommand(settings.customTerminalCommand || '');
       setEditorApp(settings.editorApp);
       setCustomEditorCommand(settings.customEditorCommand || '');
+      setExpandToolsByDefault(settings.toolDisplay?.expandToolsByDefault ?? false);
+      setShowToolCommands(settings.toolDisplay?.showToolCommands ?? false);
+      setOutputVisibility(settings.toolDisplay?.outputVisibility ?? 'hidden');
     }
   }, [open, settings]);
 
@@ -55,9 +64,21 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       customTerminalCommand: terminalApp === 'custom' ? customTerminalCommand : undefined,
       editorApp,
       customEditorCommand: editorApp === 'custom' ? customEditorCommand : undefined,
+      toolDisplay: {
+        expandToolsByDefault,
+        showToolCommands,
+        outputVisibility,
+        truncatedOutputLines: settings.toolDisplay?.truncatedOutputLines ?? 10,
+      },
     });
     onOpenChange(false);
   };
+
+  const outputVisibilityOptions = [
+    { value: 'hidden', label: 'Hidden', description: 'Click to show output' },
+    { value: 'truncated', label: 'Truncated', description: 'Show first 10 lines' },
+    { value: 'always', label: 'Always visible', description: 'Show full output' },
+  ];
 
   // Terminal options with display names and notes
   const terminalOptions = [
@@ -189,6 +210,70 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 </p>
               </div>
             )}
+          </div>
+
+          <Separator />
+
+          {/* Agent Manager Section */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🤖</span>
+              <h3 className="font-medium">Agent Manager</h3>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="expandTools">Expand tools by default</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Show tool details expanded when they appear
+                  </p>
+                </div>
+                <Switch
+                  id="expandTools"
+                  checked={expandToolsByDefault}
+                  onCheckedChange={setExpandToolsByDefault}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="showCommands">Show tool commands</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Display commands alongside tool descriptions
+                  </p>
+                </div>
+                <Switch
+                  id="showCommands"
+                  checked={showToolCommands}
+                  onCheckedChange={setShowToolCommands}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="outputVisibility">Output visibility</Label>
+                <Select
+                  value={outputVisibility}
+                  onValueChange={(v) => setOutputVisibility(v as ToolOutputVisibility)}
+                >
+                  <SelectTrigger id="outputVisibility">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {outputVisibilityOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        <span className="flex flex-col">
+                          <span>{opt.label}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {outputVisibilityOptions.find((o) => o.value === outputVisibility)?.description}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
