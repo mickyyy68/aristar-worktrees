@@ -4,6 +4,7 @@ import { Button } from '@core/ui/button';
 import { Textarea } from '@core/ui/textarea';
 import { Label } from '@core/ui/label';
 import { Switch } from '@core/ui/switch';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@core/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@core/ui/dropdown-menu';
 import { cn } from '@core/lib/utils';
 import type { TaskAgent } from '../../store/types';
@@ -109,16 +110,23 @@ export function ChatInput({
                 disabled={disabled || isLoading}
                 className="scale-75"
               />
-              <Label
-                htmlFor="send-to-all"
-                className={cn(
-                  'flex cursor-pointer items-center gap-1 text-xs',
-                  sendToAll ? 'text-foreground' : 'text-muted-foreground'
-                )}
-              >
-                <Users className="h-3 w-3" />
-                All
-              </Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Label
+                    htmlFor="send-to-all"
+                    className={cn(
+                      'flex cursor-pointer items-center gap-1 text-xs',
+                      sendToAll ? 'text-foreground' : 'text-muted-foreground'
+                    )}
+                  >
+                    <Users className="h-3 w-3" />
+                    All
+                  </Label>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  Send message to all agents simultaneously
+                </TooltipContent>
+              </Tooltip>
             </div>
           )}
         </div>
