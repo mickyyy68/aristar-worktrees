@@ -2,11 +2,52 @@
 //!
 //! Manages OpenCode server instances for agent worktrees.
 
+use dirs::home_dir;
 use portpicker::pick_unused_port;
 use std::collections::HashMap;
+use std::env;
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
+
+fn find_opencode_binary() -> Option<PathBuf> {
+    let standard_path = home_dir()?.join(".opencode").join("bin").join("opencode");
+
+    if standard_path.exists() {
+        return Some(standard_path);
+    }
+
+    if let Ok(path_var) = env::var("PATH") {
+        for dir in env::split_paths(&path_var) {
+            let candidate = dir.join("opencode");
+            if candidate.exists() && is_executable(&candidate) {
+                return Some(candidate);
+            }
+        }
+    }
+
+    None
+}
+
+fn is_executable(path: &PathBuf) -> bool {
+    #[cfg(unix)]
+    {
+        fs::metadata(path)
+            .map(|m| m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
+    #[cfg(windows)]
+    {
+        true
+    }
+}
+
+fn get_opencode_command() -> Result<PathBuf, String> {
+    find_opencode_binary()
+        .ok_or_else(|| "OpenCode binary not found. Expected at ~/.opencode/bin/opencode or in PATH. Please install OpenCode from https://opencode.ai".to_string())
+}
 
 /// Represents a running OpenCode server instance.
 pub struct OpenCodeInstance {
@@ -49,7 +90,13 @@ impl OpenCodeManager {
             worktree_path.display()
         );
 
-        let child = Command::new("opencode")
+        let opencode_path = get_opencode_command()?;
+        println!(
+            "[opencode] Using OpenCode binary: {}",
+            opencode_path.display()
+        );
+
+        let child = Command::new(&opencode_path)
             .args([
                 "serve",
                 "--port",
@@ -61,7 +108,13 @@ impl OpenCodeManager {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| format!("Failed to start OpenCode server: {}", e))?;
+            .map_err(|e| {
+                format!(
+                    "Failed to start OpenCode server ({}): {}",
+                    opencode_path.display(),
+                    e
+                )
+            })?;
 
         instances.insert(
             worktree_path.clone(),

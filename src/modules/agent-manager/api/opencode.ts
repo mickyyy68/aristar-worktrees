@@ -238,7 +238,8 @@ class OpenCodeClient {
         .filter((p: any) => p.type === 'text')
         .map((p: any) => p.text)
         .join('\n'),
-      timestamp: new Date(m.info.created),
+      // Handle multiple timestamp formats: time.created (nested), created (legacy), createdAt (alternative)
+      timestamp: new Date(m.info.time?.created || m.info.created || m.info.createdAt || Date.now()),
     }));
   }
 
@@ -601,7 +602,8 @@ class OpenCodeClient {
         .filter((p: any) => p.type === 'text')
         .map((p: any) => p.text)
         .join('\n'),
-      timestamp: new Date(m.info.created),
+      // Handle multiple timestamp formats: time.created (nested), created (legacy), createdAt (alternative)
+      timestamp: new Date(m.info.time?.created || m.info.created || m.info.createdAt || Date.now()),
       parts: m.parts,
     }));
   }

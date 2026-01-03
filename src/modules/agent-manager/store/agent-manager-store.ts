@@ -14,6 +14,17 @@ import { opencodeClient } from '../api/opencode';
 import { commands } from '@core/lib';
 import { sendMessageAsync } from '../api/use-agent-sse';
 
+// ============ Helper Functions ============
+
+/**
+ * Generate a composite key for agent-specific state (messages, loading, etc.)
+ * Agent IDs are only unique within a task (e.g., "agent-1"), so we need to
+ * combine taskId and agentId to create a globally unique key.
+ */
+export function getAgentKey(taskId: string, agentId: string): string {
+  return `${taskId}:${agentId}`;
+}
+
 // ============ State Interface ============
 
 interface AgentManagerState {
@@ -31,12 +42,12 @@ interface AgentManagerState {
   isLoadingOpenCodeData: boolean;
   error: string | null;
 
-  // Per-agent chat state
-  agentMessages: Record<string, OpenCodeMessage[]>; // agentId -> messages
-  agentLoading: Record<string, boolean>;
+  // Per-agent chat state (keyed by taskId:agentId composite key)
+  agentMessages: Record<string, OpenCodeMessage[]>; // "taskId:agentId" -> messages
+  agentLoading: Record<string, boolean>; // "taskId:agentId" -> loading state
 
-  // OpenCode connection state per agent
-  agentOpencodePorts: Record<string, number>; // agentId -> port
+  // OpenCode connection state per agent (keyed by taskId:agentId composite key)
+  agentOpencodePorts: Record<string, number>; // "taskId:agentId" -> port
 
   // Orphaned agents (worktree missing)
   orphanedAgents: Record<string, string[]>; // taskId -> agentIds with missing worktrees
@@ -79,8 +90,8 @@ interface AgentManagerActions {
 
   // Messages
   loadAgentMessages: (taskId: string, agentId: string) => Promise<void>;
-  clearAgentMessages: (agentId: string) => void;
-  addAgentMessage: (agentId: string, message: OpenCodeMessage) => void;
+  clearAgentMessages: (taskId: string, agentId: string) => void;
+  addAgentMessage: (taskId: string, agentId: string, message: OpenCodeMessage) => void;
 
   // Error handling
   clearError: () => void;
@@ -95,7 +106,7 @@ interface AgentManagerActions {
   recoverTaskAgents: (taskId: string) => Promise<void>;
 
   // Agent/Task status updates
-  markAgentIdle: (agentId: string) => Promise<void>;
+  markAgentIdle: (taskId: string, agentId: string) => Promise<void>;
   updateTaskStatusFromAgents: (taskId: string) => Promise<void>;
 }
 
@@ -123,9 +134,54 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
       // ============ Task CRUD ============
 
       loadTasks: async () => {
+        console.log('[loadTasks] Starting...');
         set({ isLoading: true, error: null });
         try {
           const tasks = await commands.getTasks();
+          console.log('[loadTasks] Loaded tasks:', tasks.length, tasks.map(t => ({ id: t.id, name: t.name, agents: t.agents.map(a => a.id) })));
+          
+          // Build set of valid agent keys from loaded tasks
+          const validAgentKeys = new Set<string>();
+          for (const task of tasks) {
+            for (const agent of task.agents) {
+              validAgentKeys.add(getAgentKey(task.id, agent.id));
+            }
+          }
+          console.log('[loadTasks] Valid agent keys:', Array.from(validAgentKeys));
+          
+          // Clean up stale agent data (messages, loading, ports) for non-existent tasks/agents
+          // This handles orphaned data from deleted tasks or old key format (pre-composite keys)
+          const { agentMessages, agentLoading, agentOpencodePorts } = get();
+          console.log('[loadTasks] Current state keys - messages:', Object.keys(agentMessages), 'loading:', Object.keys(agentLoading), 'ports:', Object.keys(agentOpencodePorts));
+          
+          const cleanedMessages: Record<string, OpenCodeMessage[]> = {};
+          const cleanedLoading: Record<string, boolean> = {};
+          const cleanedPorts: Record<string, number> = {};
+          
+          for (const key of Object.keys(agentMessages)) {
+            if (validAgentKeys.has(key)) {
+              cleanedMessages[key] = agentMessages[key];
+            } else {
+              console.log('[loadTasks] Removing stale messages for key:', key);
+            }
+          }
+          for (const key of Object.keys(agentLoading)) {
+            if (validAgentKeys.has(key)) {
+              cleanedLoading[key] = agentLoading[key];
+            }
+          }
+          for (const key of Object.keys(agentOpencodePorts)) {
+            if (validAgentKeys.has(key)) {
+              cleanedPorts[key] = agentOpencodePorts[key];
+            }
+          }
+          
+          console.log('[loadTasks] Cleaned state keys - messages:', Object.keys(cleanedMessages));
+          set({
+            agentMessages: cleanedMessages,
+            agentLoading: cleanedLoading,
+            agentOpencodePorts: cleanedPorts,
+          });
           
           // Reset stale running agents on app startup
           // When app restarts, OpenCode servers are not running, so "running" status is stale
@@ -133,6 +189,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           for (const task of tasks) {
             for (const agent of task.agents) {
               if (agent.status === 'running') {
+                console.log('[loadTasks] Resetting running agent to idle:', task.id, agent.id);
                 // Reset to idle since server isn't running on fresh app start
                 await commands.updateAgentStatus(task.id, agent.id, 'idle' as AgentStatus);
                 needsRefetch = true;
@@ -140,6 +197,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
             }
             // Also reset task status if it was running
             if (task.status === 'running') {
+              console.log('[loadTasks] Resetting running task to idle:', task.id);
               await commands.updateTask(task.id, undefined, 'idle' as any);
               needsRefetch = true;
             }
@@ -170,11 +228,23 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           
           // Recover agents for the active task (restored from localStorage)
           // This restarts OpenCode servers and loads chat messages
-          const { activeTaskId } = get();
+          const { activeTaskId, activeAgentId } = get();
+          console.log('[loadTasks] Active task/agent from state:', { activeTaskId, activeAgentId });
           if (activeTaskId) {
-            get().recoverTaskAgents(activeTaskId);
+            // Verify the active task still exists
+            if (correctedTasks.some(t => t.id === activeTaskId)) {
+              console.log('[loadTasks] Triggering recoverTaskAgents for:', activeTaskId);
+              get().recoverTaskAgents(activeTaskId);
+            } else {
+              console.log('[loadTasks] Active task no longer exists, clearing selection');
+              // Active task was deleted, clear selection
+              set({ activeTaskId: null, activeAgentId: null });
+            }
+          } else {
+            console.log('[loadTasks] No active task, skipping recovery');
           }
         } catch (err) {
+          console.error('[loadTasks] Error:', err);
           const errorMsg = String(err);
           set({ error: errorMsg, isLoading: false });
           toast.error('Failed to load tasks', { description: errorMsg });
@@ -345,8 +415,10 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           return;
         }
 
+        const agentKey = getAgentKey(taskId, agentId);
+
         set((state) => ({
-          agentLoading: { ...state.agentLoading, [agentId]: true },
+          agentLoading: { ...state.agentLoading, [agentKey]: true },
         }));
 
         try {
@@ -354,7 +426,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           const port = await commands.startAgentOpencode(taskId, agentId);
 
           set((state) => ({
-            agentOpencodePorts: { ...state.agentOpencodePorts, [agentId]: port },
+            agentOpencodePorts: { ...state.agentOpencodePorts, [agentKey]: port },
           }));
 
           // Connect to the server and wait for it to be ready
@@ -364,16 +436,18 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
             throw new Error('OpenCode server did not become ready');
           }
 
-          // Create or get session
-          const sessions = await opencodeClient.listSessions();
-          let sessionId = sessions[0]?.id || null;
+          // Always create a new session for fresh execution
+          // This ensures we don't load old messages from previous runs
+          // Include timestamp for easy identification in OpenCode's session list
+          const session = await opencodeClient.createSession(
+            `${task.name} - ${agent.modelId} - ${new Date().toLocaleString()}`
+          );
+          const sessionId = session.id;
 
-          if (!sessionId) {
-            const session = await opencodeClient.createSession(`${task.name} - ${agent.modelId}`);
-            sessionId = session.id;
-          } else {
-            opencodeClient.setSession(sessionId);
-          }
+          // Clear any existing messages in local state for this agent
+          set((state) => ({
+            agentMessages: { ...state.agentMessages, [agentKey]: [] },
+          }));
 
           // Update agent with session ID and status
           await commands.updateAgentSession(taskId, agentId, sessionId);
@@ -403,7 +477,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           set((state) => ({
             agentMessages: {
               ...state.agentMessages,
-              [agentId]: [...(state.agentMessages[agentId] || []), userMessage],
+              [agentKey]: [...(state.agentMessages[agentKey] || []), userMessage],
             },
           }));
 
@@ -420,7 +494,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           console.error(`[AgentManager] Failed to start agent ${agentId}:`, err);
           const errorMsg = String(err);
           set((state) => ({
-            agentLoading: { ...state.agentLoading, [agentId]: false },
+            agentLoading: { ...state.agentLoading, [agentKey]: false },
             error: errorMsg,
           }));
           toast.error('Failed to start agent', { description: errorMsg });
@@ -450,6 +524,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
         const { tasks } = get();
         const task = tasks.find((t) => t.id === taskId);
         const agent = task?.agents.find((a) => a.id === agentId);
+        const agentKey = getAgentKey(taskId, agentId);
 
         if (agent?.sessionId) {
           try {
@@ -478,26 +553,25 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
                 }
               : t
           ),
-          agentLoading: { ...state.agentLoading, [agentId]: false },
+          agentLoading: { ...state.agentLoading, [agentKey]: false },
         }));
       },
 
-      markAgentIdle: async (agentId: string) => {
+      markAgentIdle: async (taskId: string, agentId: string) => {
         const { tasks } = get();
 
-        // Find task containing this agent
-        const task = tasks.find((t) => t.agents.some((a) => a.id === agentId));
+        const task = tasks.find((t) => t.id === taskId);
         if (!task) return;
 
         const agent = task.agents.find((a) => a.id === agentId);
         if (!agent || agent.status !== 'running') return; // Only transition from running
 
         try {
-          await commands.updateAgentStatus(task.id, agentId, 'idle' as AgentStatus);
+          await commands.updateAgentStatus(taskId, agentId, 'idle' as AgentStatus);
 
           set((state) => ({
             tasks: state.tasks.map((t) =>
-              t.id === task.id
+              t.id === taskId
                 ? {
                     ...t,
                     agents: t.agents.map((a) =>
@@ -509,7 +583,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           }));
 
           // Check if all agents in task are now idle/completed
-          get().updateTaskStatusFromAgents(task.id);
+          get().updateTaskStatusFromAgents(taskId);
         } catch (err) {
           console.error(`[AgentManager] Failed to mark agent ${agentId} as idle:`, err);
         }
@@ -647,11 +721,12 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
         for (const agent of agents) {
           if (!agent.sessionId) continue;
 
-          const port = agentOpencodePorts[agent.id];
+          const agentKey = getAgentKey(taskId, agent.id);
+          const port = agentOpencodePorts[agentKey];
           if (!port) continue;
 
           set((state) => ({
-            agentLoading: { ...state.agentLoading, [agent.id]: true },
+            agentLoading: { ...state.agentLoading, [agentKey]: true },
           }));
 
           try {
@@ -666,7 +741,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
             set((state) => ({
               agentMessages: {
                 ...state.agentMessages,
-                [agent.id]: [...(state.agentMessages[agent.id] || []), userMessage],
+                [agentKey]: [...(state.agentMessages[agentKey] || []), userMessage],
               },
             }));
 
@@ -681,7 +756,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
             console.error(`[AgentManager] Failed to send follow-up to ${agent.id}:`, err);
             const errorMsg = String(err);
             set((state) => ({
-              agentLoading: { ...state.agentLoading, [agent.id]: false },
+              agentLoading: { ...state.agentLoading, [agentKey]: false },
               error: `Failed to send message: ${errorMsg}`,
             }));
             toast.error('Failed to send message', { description: errorMsg });
@@ -805,11 +880,18 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
       // ============ OpenCode Server Recovery ============
       
       recoverTaskAgents: async (taskId) => {
+        console.log('[recoverTaskAgents] Starting for taskId:', taskId);
         const { tasks, agentOpencodePorts, orphanedAgents, activeAgentId } = get();
         const task = tasks.find((t) => t.id === taskId);
-        if (!task) return;
+        if (!task) {
+          console.log('[recoverTaskAgents] Task not found:', taskId);
+          return;
+        }
         
         const orphanedIds = orphanedAgents[taskId] || [];
+        console.log('[recoverTaskAgents] Task agents:', task.agents.map(a => ({ id: a.id, sessionId: a.sessionId })));
+        console.log('[recoverTaskAgents] Orphaned IDs:', orphanedIds);
+        console.log('[recoverTaskAgents] Active agent ID:', activeAgentId);
         
         // Only recover the active agent to avoid loading all chats
         // Other agents will be recovered when they become active
@@ -817,46 +899,76 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           ? task.agents.filter(a => a.id === activeAgentId)
           : [task.agents[0]].filter(Boolean); // Fallback to first agent
         
+        console.log('[recoverTaskAgents] Agents to recover:', agentsToRecover.map(a => a.id));
+        
         for (const agent of agentsToRecover) {
           // Skip orphaned agents
-          if (orphanedIds.includes(agent.id)) continue;
+          if (orphanedIds.includes(agent.id)) {
+            console.log('[recoverTaskAgents] Skipping orphaned agent:', agent.id);
+            continue;
+          }
           
           // Skip agents without sessions (never started)
-          if (!agent.sessionId) continue;
+          if (!agent.sessionId) {
+            console.log('[recoverTaskAgents] Skipping agent without session:', agent.id);
+            continue;
+          }
+          
+          const agentKey = getAgentKey(taskId, agent.id);
+          console.log('[recoverTaskAgents] Processing agent:', agent.id, 'key:', agentKey, 'sessionId:', agent.sessionId);
           
           // Check if OpenCode is already running
-          const existingPort = agentOpencodePorts[agent.id];
-          if (existingPort) continue;
+          const existingPort = agentOpencodePorts[agentKey];
+          if (existingPort) {
+            console.log('[recoverTaskAgents] Port already exists for agent:', agent.id, 'port:', existingPort);
+            continue;
+          }
           
           // Check if server is running via backend
           try {
+            console.log('[recoverTaskAgents] Checking if server is running for agent:', agent.id);
             let port = await commands.getAgentOpencodePort(taskId, agent.id);
             let serverWasStarted = false;
             
             if (!port) {
+              console.log('[recoverTaskAgents] Server not running, starting for agent:', agent.id);
               // Server not running, start it
               port = await commands.startAgentOpencode(taskId, agent.id);
               serverWasStarted = true;
+              console.log('[recoverTaskAgents] Server started on port:', port);
+            } else {
+              console.log('[recoverTaskAgents] Server already running on port:', port);
             }
             
             // Store the port
             set((state) => ({
-              agentOpencodePorts: { ...state.agentOpencodePorts, [agent.id]: port },
+              agentOpencodePorts: { ...state.agentOpencodePorts, [agentKey]: port },
             }));
             
             // Connect and wait for server to be ready
+            console.log('[recoverTaskAgents] Connecting to server and waiting for ready...');
             opencodeClient.connect(port);
             const isReady = await opencodeClient.waitForReady();
             if (!isReady) {
-              console.error(`[AgentManager] Server not ready for agent ${agent.id}`);
+              console.error('[recoverTaskAgents] Server not ready for agent:', agent.id);
               continue;
             }
+            console.log('[recoverTaskAgents] Server is ready');
             
             // Load messages from the session
+            console.log('[recoverTaskAgents] Loading messages for session:', agent.sessionId);
             opencodeClient.setSession(agent.sessionId);
             const messages = await opencodeClient.getSessionMessages();
+            console.log('[recoverTaskAgents] Loaded messages:', messages.length);
+            
+            // Deduplicate messages by ID to prevent showing duplicates
+            const uniqueMessages = messages.filter((msg, index, self) =>
+              index === self.findIndex((m) => m.id === msg.id)
+            );
+            console.log('[recoverTaskAgents] After deduplication:', uniqueMessages.length);
+            
             set((state) => ({
-              agentMessages: { ...state.agentMessages, [agent.id]: messages },
+              agentMessages: { ...state.agentMessages, [agentKey]: uniqueMessages },
             }));
             
             if (serverWasStarted) {
@@ -865,9 +977,10 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
               });
             }
           } catch (err) {
-            console.error(`[AgentManager] Failed to recover agent ${agent.id}:`, err);
+            console.error(`[recoverTaskAgents] Failed to recover agent ${agent.id}:`, err);
           }
         }
+        console.log('[recoverTaskAgents] Done. Final agentMessages keys:', Object.keys(get().agentMessages));
       },
 
       // ============ Messages ============
@@ -879,32 +992,41 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
 
         if (!agent?.sessionId) return;
 
-        const port = agentOpencodePorts[agentId];
+        const agentKey = getAgentKey(taskId, agentId);
+        const port = agentOpencodePorts[agentKey];
         if (!port) return;
 
         try {
           opencodeClient.connect(port);
           opencodeClient.setSession(agent.sessionId);
           const messages = await opencodeClient.getSessionMessages();
+          
+          // Deduplicate messages by ID
+          const uniqueMessages = messages.filter((msg, index, self) =>
+            index === self.findIndex((m) => m.id === msg.id)
+          );
+          
           set((state) => ({
-            agentMessages: { ...state.agentMessages, [agentId]: messages },
+            agentMessages: { ...state.agentMessages, [agentKey]: uniqueMessages },
           }));
         } catch (err) {
           console.error('[AgentManager] Failed to load messages:', err);
         }
       },
 
-      clearAgentMessages: (agentId) => {
+      clearAgentMessages: (taskId, agentId) => {
+        const agentKey = getAgentKey(taskId, agentId);
         set((state) => ({
-          agentMessages: { ...state.agentMessages, [agentId]: [] },
+          agentMessages: { ...state.agentMessages, [agentKey]: [] },
         }));
       },
 
-      addAgentMessage: (agentId, message) => {
+      addAgentMessage: (taskId, agentId, message) => {
+        const agentKey = getAgentKey(taskId, agentId);
         set((state) => ({
           agentMessages: {
             ...state.agentMessages,
-            [agentId]: [...(state.agentMessages[agentId] || []), message],
+            [agentKey]: [...(state.agentMessages[agentKey] || []), message],
           },
         }));
       },

@@ -50,11 +50,6 @@ export function Header({ onAddRepository }: HeaderProps) {
             </div>
             <div>
               <h1 className="text-lg font-semibold">Aristar Worktrees</h1>
-              {activeView === 'worktrees' && selectedRepo && (
-                <p className="text-sm text-muted-foreground">
-                  {getRepositoryName(selectedRepo.path)}
-                </p>
-              )}
             </div>
           </div>
 

@@ -12,6 +12,33 @@ The `agent-manager` module provides the frontend for the AI agent orchestration 
 - **Chat Interface**: Send prompts and view AI responses
 - **Tool Visualization**: Display tool calls and their results
 
+## Prerequisites
+
+### OpenCode CLI
+
+The agent manager requires the OpenCode CLI to be installed for running AI agents. The app looks for the binary at:
+
+- `~/.opencode/bin/opencode` (standard installation location on macOS)
+- Any directory in `PATH`
+
+Download OpenCode from https://opencode.ai
+
+## Composite Key Architecture
+
+Agent state is keyed by a composite key: `{taskId}:{agentId}`. This is necessary because agent IDs (e.g., "agent-1") are only unique within a task context.
+
+```typescript
+import { getAgentKey } from '@agent-manager/store';
+
+const key = getAgentKey('a1b2c3d4', 'agent-1');
+// Result: "a1b2c3d4:agent-1"
+```
+
+All per-agent state uses this composite key:
+- `agentMessages[key]` - chat history
+- `agentLoading[key]` - loading state
+- `agentOpencodePorts[key]` - OpenCode server port
+
 ## File Structure
 
 ```
@@ -180,13 +207,13 @@ The `useAgentSSE` hook manages SSE connections and message state.
 ```typescript
 import { useAgentSSE } from '@agent-manager/api';
 
-function ChatComponent({ port, sessionId }) {
+function ChatComponent({ taskId, agentId, port, sessionId }) {
   const {
     messages,        // StreamingMessage[]
     isConnected,     // boolean
     isProcessing,    // boolean (AI is generating)
     error,           // string | null
-  } = useAgentSSE(port, sessionId);
+  } = useAgentSSE(taskId, agentId, port, sessionId);
 
   return (
     <div>
@@ -240,7 +267,7 @@ function TaskList() {
 | `addAgentToTask(taskId, model)` | Add agent to task |
 | `removeAgent(taskId, agentId)` | Remove agent |
 | `acceptAgent(taskId, agentId)` | Mark agent as winner |
-| `markAgentIdle(agentId)` | Transition agent from "running" to "idle" when AI finishes |
+| `markAgentIdle(taskId, agentId)` | Transition agent from "running" to "idle" when AI finishes |
 | `updateTaskStatusFromAgents(taskId)` | Update task status based on aggregate agent statuses |
 
 ## Types

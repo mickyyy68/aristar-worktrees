@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { useAgentManagerStore } from '../store/agent-manager-store';
+import { useAgentManagerStore, getAgentKey } from '../store/agent-manager-store';
 import { opencodeClient } from './opencode';
 import type { OpenCodeMessage } from './opencode';
 import type { MessagePart } from '../store/types';
@@ -44,7 +44,12 @@ export interface StreamingMessage extends OpenCodeMessage {
  * Hook to subscribe to SSE events for a specific agent
  * Handles real-time message streaming updates
  */
-export function useAgentSSE(agentId: string | null, port: number | null, sessionId: string | null) {
+export function useAgentSSE(
+  taskId: string | null,
+  agentId: string | null,
+  port: number | null,
+  sessionId: string | null
+) {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const streamingMessageRef = useRef<StreamingMessage | null>(null);
 
@@ -53,32 +58,35 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
     agentLoading,
   } = useAgentManagerStore();
 
+  // Compute the composite key for this agent
+  const agentKey = taskId && agentId ? getAgentKey(taskId, agentId) : null;
+
   // Helper to update agent messages in the store
-  const updateMessages = useCallback((agentId: string, updater: (messages: OpenCodeMessage[]) => OpenCodeMessage[]) => {
+  const updateMessages = useCallback((key: string, updater: (messages: OpenCodeMessage[]) => OpenCodeMessage[]) => {
     useAgentManagerStore.setState((state) => ({
       agentMessages: {
         ...state.agentMessages,
-        [agentId]: updater(state.agentMessages[agentId] || []),
+        [key]: updater(state.agentMessages[key] || []),
       },
     }));
   }, []);
 
   // Helper to set agent loading state
-  const setAgentLoading = useCallback((agentId: string, loading: boolean) => {
+  const setAgentLoading = useCallback((key: string, loading: boolean) => {
     useAgentManagerStore.setState((state) => ({
       agentLoading: {
         ...state.agentLoading,
-        [agentId]: loading,
+        [key]: loading,
       },
     }));
   }, []);
 
   // Handle SSE events
   const handleEvent = useCallback((event: SSEEvent) => {
-    console.log('[SSE] handleEvent called:', { agentId, sessionId, eventType: event.type });
+    console.log('[SSE] handleEvent called:', { taskId, agentId, agentKey, sessionId, eventType: event.type });
     
-    if (!agentId || !sessionId) {
-      console.log('[SSE] Skipping - no agentId or sessionId:', { agentId, sessionId });
+    if (!taskId || !agentId || !agentKey || !sessionId) {
+      console.log('[SSE] Skipping - missing taskId, agentId, or sessionId:', { taskId, agentId, sessionId });
       return;
     }
 
@@ -118,7 +126,7 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
         }
 
         // Check if we already have this message
-        const existingMessages = useAgentManagerStore.getState().agentMessages[agentId] || [];
+        const existingMessages = useAgentManagerStore.getState().agentMessages[agentKey] || [];
         const existingMessage = existingMessages.find(m => m.id === info.id);
         console.log('[SSE] message.updated - existing message check:', { exists: !!existingMessage, messageCount: existingMessages.length });
         
@@ -136,8 +144,8 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
           console.log('[SSE] message.updated - created new message:', newMessage.id);
 
           // Add to messages
-          updateMessages(agentId, (messages) => [...messages, newMessage as OpenCodeMessage]);
-          setAgentLoading(agentId, true);
+          updateMessages(agentKey, (messages) => [...messages, newMessage as OpenCodeMessage]);
+          setAgentLoading(agentKey, true);
           console.log('[SSE] message.updated - added message to store');
         }
         break;
@@ -160,7 +168,7 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
         // Creating messages here caused user message parts to create duplicate "assistant" messages
         if (!streamingMessageRef.current && part.messageID) {
           console.log('[SSE] message.part.updated - no streaming message, looking for existing');
-          const existingMessages = useAgentManagerStore.getState().agentMessages[agentId] || [];
+          const existingMessages = useAgentManagerStore.getState().agentMessages[agentKey] || [];
           const existingMessage = existingMessages.find(m => m.id === part.messageID) as StreamingMessage | undefined;
           if (existingMessage) {
             // Preserve existing parts when recovering the streaming ref
@@ -250,7 +258,7 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
 
         // Update message in store with both content and parts
         const currentMessage = streamingMessageRef.current;
-        updateMessages(agentId, (messages) =>
+        updateMessages(agentKey, (messages) =>
           messages.map((m) =>
             m.id === currentMessage.id
               ? { ...m, content: currentMessage.content, parts: [...currentMessage.parts] }
@@ -272,7 +280,7 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
         console.log('[SSE] session.status - statusType:', statusType);
         
         if (statusType === 'busy' || statusType === 'running' || statusType === 'pending') {
-          setAgentLoading(agentId, true);
+          setAgentLoading(agentKey, true);
           console.log('[SSE] session.status - set loading true');
         } else if (statusType === 'idle') {
           console.log('[SSE] session.status - idle, completing message');
@@ -281,7 +289,7 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
             streamingMessageRef.current.isStreaming = false;
             const currentMessage = streamingMessageRef.current;
             console.log('[SSE] session.status - final content:', currentMessage.content.substring(0, 100) + '...');
-            updateMessages(agentId, (messages) =>
+            updateMessages(agentKey, (messages) =>
               messages.map((m) =>
                 m.id === currentMessage.id
                   ? { ...m, isStreaming: false }
@@ -290,11 +298,11 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
             );
             streamingMessageRef.current = null;
           }
-          setAgentLoading(agentId, false);
+          setAgentLoading(agentKey, false);
           console.log('[SSE] session.status - set loading false');
           
           // Mark agent as idle (completed processing)
-          useAgentManagerStore.getState().markAgentIdle(agentId);
+          useAgentManagerStore.getState().markAgentIdle(taskId, agentId);
         }
         break;
       }
@@ -306,7 +314,7 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
           streamingMessageRef.current.isStreaming = false;
           const currentMessage = streamingMessageRef.current;
           console.log('[SSE] session.idle - final content:', currentMessage.content.substring(0, 100) + '...');
-          updateMessages(agentId, (messages) =>
+          updateMessages(agentKey, (messages) =>
             messages.map((m) =>
               m.id === currentMessage.id
                 ? { ...m, isStreaming: false }
@@ -315,11 +323,11 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
           );
           streamingMessageRef.current = null;
         }
-        setAgentLoading(agentId, false);
+        setAgentLoading(agentKey, false);
         console.log('[SSE] session.idle - set loading false');
         
         // Mark agent as idle (completed processing)
-        useAgentManagerStore.getState().markAgentIdle(agentId);
+        useAgentManagerStore.getState().markAgentIdle(taskId, agentId);
         break;
       }
 
@@ -337,8 +345,8 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
           isStreaming: true,
         };
         streamingMessageRef.current = newMessage;
-        updateMessages(agentId, (messages) => [...messages, newMessage as OpenCodeMessage]);
-        setAgentLoading(agentId, true);
+        updateMessages(agentKey, (messages) => [...messages, newMessage as OpenCodeMessage]);
+        setAgentLoading(agentKey, true);
         break;
       }
 
@@ -347,7 +355,7 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
         if (streamingMessageRef.current && streamingMessageRef.current.id === e.properties.messageID) {
           streamingMessageRef.current.isStreaming = false;
           const currentMessage = streamingMessageRef.current;
-          updateMessages(agentId, (messages) =>
+          updateMessages(agentKey, (messages) =>
             messages.map((m) =>
               m.id === currentMessage.id
                 ? { ...m, isStreaming: false }
@@ -356,11 +364,11 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
           );
           streamingMessageRef.current = null;
         }
-        setAgentLoading(agentId, false);
+        setAgentLoading(agentKey, false);
         break;
       }
     }
-  }, [agentId, sessionId, updateMessages, setAgentLoading]);
+  }, [taskId, agentId, agentKey, sessionId, updateMessages, setAgentLoading]);
 
   // Subscribe to SSE events when agent/port/session changes
   useEffect(() => {
@@ -370,29 +378,39 @@ export function useAgentSSE(agentId: string | null, port: number | null, session
       unsubscribeRef.current = null;
     }
 
-    if (!agentId || !port || !sessionId) return;
+    if (!taskId || !agentId || !agentKey || !port || !sessionId) return;
 
     // Connect and subscribe
     try {
       opencodeClient.connect(port);
       unsubscribeRef.current = opencodeClient.subscribeToEvents(handleEvent);
-      console.log(`[SSE] Subscribed for agent ${agentId} on port ${port}`);
+      console.log(`[SSE] Subscribed for agent ${agentKey} on port ${port}`);
     } catch (err) {
       console.error('[SSE] Failed to subscribe:', err);
     }
 
     return () => {
       if (unsubscribeRef.current) {
-        console.log(`[SSE] Unsubscribing for agent ${agentId}`);
+        console.log(`[SSE] Unsubscribing for agent ${agentKey}`);
         unsubscribeRef.current();
         unsubscribeRef.current = null;
       }
     };
-  }, [agentId, port, sessionId, handleEvent]);
+  }, [taskId, agentId, agentKey, port, sessionId, handleEvent]);
 
+  const messages = agentKey ? (agentMessages[agentKey] || []) : [];
+  const isLoadingState = agentKey ? (agentLoading[agentKey] || false) : false;
+  
+  console.log('[useAgentSSE] Return values:', {
+    agentKey,
+    messagesCount: messages.length,
+    isLoading: isLoadingState,
+    availableKeys: Object.keys(agentMessages),
+  });
+  
   return {
-    messages: agentId ? (agentMessages[agentId] || []) : [],
-    isLoading: agentId ? (agentLoading[agentId] || false) : false,
+    messages,
+    isLoading: isLoadingState,
   };
 }
 

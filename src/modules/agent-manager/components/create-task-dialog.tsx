@@ -82,7 +82,12 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
       }
     } catch (err) {
       console.error('Failed to load OpenCode data:', err);
-      setError('Failed to load models. Make sure OpenCode is installed.');
+      const errorMsg = String(err);
+      if (errorMsg.includes('not found') || errorMsg.includes('No such file')) {
+        setError('OpenCode binary not found. Please install OpenCode from https://opencode.ai');
+      } else {
+        setError('Failed to load models. Make sure OpenCode is installed.');
+      }
     } finally {
       setLoadingProviders(false);
     }

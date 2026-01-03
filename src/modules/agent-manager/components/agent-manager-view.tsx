@@ -91,15 +91,28 @@ export function AgentManagerView() {
   }, [activeTask, activeAgentId, setActiveAgent]);
 
   // Get port and session for SSE subscription
-  const agentPort = activeAgentId ? agentOpencodePorts[activeAgentId] : null;
+  // Use composite key (taskId:agentId) for agentOpencodePorts lookup
+  const agentKey = activeTaskId && activeAgentId ? `${activeTaskId}:${activeAgentId}` : null;
+  const agentPort = agentKey ? agentOpencodePorts[agentKey] : null;
   const agentSessionId = activeAgent?.sessionId || null;
 
   // Subscribe to SSE events for the active agent
   const { messages, isLoading } = useAgentSSE(
+    activeTaskId,
     activeAgentId,
     agentPort || null,
     agentSessionId
   );
+
+  console.log('[AgentManagerView] Render:', {
+    activeTaskId,
+    activeAgentId,
+    agentKey,
+    agentPort,
+    agentSessionId,
+    messagesCount: messages.length,
+    isLoading,
+  });
 
   const handleSelectTask = useCallback((taskId: string) => {
     setActiveTask(taskId);

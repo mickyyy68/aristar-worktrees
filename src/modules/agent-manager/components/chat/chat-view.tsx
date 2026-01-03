@@ -57,11 +57,15 @@ function consolidateMessages(messages: OpenCodeMessage[]): MessageWithParts[] {
 export function ChatView({ messages, isLoading = false }: ChatViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  console.log('[ChatView] Received messages:', messages.length, 'first few:', messages.slice(0, 3).map(m => ({ id: m.id, role: m.role, contentLength: m.content?.length })));
+
   // Consolidate consecutive assistant messages
   const consolidatedMessages = useMemo(
     () => consolidateMessages(messages),
     [messages]
   );
+  
+  console.log('[ChatView] After consolidation:', consolidatedMessages.length);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

@@ -151,6 +151,17 @@ impl OpenCodeManager {
 - One instance per worktree path
 - Reuses existing instance if already running
 
+**OpenCode CLI Dependency:**
+
+The agent manager requires the OpenCode CLI to be installed. The app looks for the binary in the following locations:
+
+1. `~/.opencode/bin/opencode` (standard installation location)
+2. Any directory in `PATH` environment variable
+
+**Installation:**
+
+Download OpenCode from https://opencode.ai and ensure the `opencode` binary is available. On macOS, the standard installation path is `~/.opencode/bin/opencode`.
+
 **Usage in main.rs:**
 ```rust
 tauri::Builder::default()
