@@ -11,6 +11,94 @@ use crate::core::get_aristar_worktrees_base;
 
 use super::types::{BranchInfo, CommitInfo, WorktreeInfo};
 
+// ============ Path Security ============
+
+/// Validate that a path is within an allowed base directory.
+/// This prevents path traversal attacks where user input could escape
+/// to arbitrary filesystem locations.
+///
+/// # Arguments
+/// * `path` - The path to validate (can be relative or absolute)
+/// * `allowed_bases` - List of allowed base directories
+///
+/// # Returns
+/// * `Ok(PathBuf)` - The canonicalized path if valid
+/// * `Err(String)` - Error message if path traversal detected
+pub fn validate_path_within_bases(path: &Path, allowed_bases: &[PathBuf]) -> Result<PathBuf, String> {
+    // For paths that don't exist yet, we need to check the parent
+    let check_path = if path.exists() {
+        path.canonicalize().map_err(|e| format!("Failed to resolve path: {}", e))?
+    } else {
+        // Path doesn't exist yet - check parent and combine with filename
+        let parent = path.parent().ok_or("Path has no parent directory")?;
+        let filename = path.file_name().ok_or("Path has no filename")?;
+        
+        // Ensure parent exists or create it, then canonicalize
+        if !parent.exists() {
+            // Walk up to find existing ancestor
+            let mut ancestor = parent.to_path_buf();
+            while !ancestor.exists() {
+                ancestor = ancestor.parent()
+                    .ok_or("Cannot find existing ancestor directory")?
+                    .to_path_buf();
+            }
+            let canonical_ancestor = ancestor.canonicalize()
+                .map_err(|e| format!("Failed to resolve ancestor: {}", e))?;
+            
+            // Check ancestor is in allowed bases
+            if !allowed_bases.iter().any(|base| {
+                base.canonicalize().ok()
+                    .map(|cb| canonical_ancestor.starts_with(&cb))
+                    .unwrap_or(false)
+            }) {
+                return Err(format!(
+                    "Path traversal detected: {} is not within allowed directories",
+                    path.display()
+                ));
+            }
+            
+            // Build expected canonical path
+            let relative_from_ancestor = parent.strip_prefix(&ancestor).unwrap_or(parent);
+            canonical_ancestor.join(relative_from_ancestor).join(filename)
+        } else {
+            let canonical_parent = parent.canonicalize()
+                .map_err(|e| format!("Failed to resolve parent: {}", e))?;
+            canonical_parent.join(filename)
+        }
+    };
+
+    // Verify the path is within one of the allowed bases
+    let is_allowed = allowed_bases.iter().any(|base| {
+        base.canonicalize().ok()
+            .map(|canonical_base| check_path.starts_with(&canonical_base))
+            .unwrap_or(false)
+    });
+
+    if !is_allowed {
+        return Err(format!(
+            "Path traversal detected: {} is not within allowed directories",
+            path.display()
+        ));
+    }
+
+    Ok(check_path)
+}
+
+/// Get the list of allowed base directories for worktree operations.
+/// This includes:
+/// - ~/.aristar-worktrees (our managed directory)
+/// - User's home directory (for repos in Documents, Projects, etc.)
+pub fn get_allowed_worktree_bases() -> Vec<PathBuf> {
+    let mut bases = vec![get_aristar_worktrees_base()];
+    
+    // Also allow home directory for user repos
+    if let Some(home) = dirs::home_dir() {
+        bases.push(home);
+    }
+    
+    bases
+}
+
 /// Get the repository name from its path.
 pub fn get_repository_name(path: &str) -> String {
     Path::new(path)
@@ -52,7 +140,8 @@ pub fn is_git_repository(path: &str) -> bool {
     Path::new(&git_path).exists() || Path::new(path).join(".git").is_dir()
 }
 
-/// Run a git command in the specified directory.
+/// Run a git command in the specified directory (synchronous version).
+/// NOTE: For Tauri commands, prefer `run_git_command_async` to avoid blocking the main thread.
 pub fn run_git_command(args: &[&str], cwd: &str) -> Result<std::process::Output, String> {
     let output = Command::new("git")
         .args(args)
@@ -66,6 +155,30 @@ pub fn run_git_command(args: &[&str], cwd: &str) -> Result<std::process::Output,
     }
 
     Ok(output)
+}
+
+/// Run a git command asynchronously without blocking the Tauri main thread.
+/// This wraps the blocking git command in tokio::task::spawn_blocking.
+pub async fn run_git_command_async(
+    args: Vec<String>,
+    cwd: String,
+) -> Result<std::process::Output, String> {
+    tokio::task::spawn_blocking(move || {
+        let output = Command::new("git")
+            .args(&args)
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(stderr.to_string());
+        }
+
+        Ok(output)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 /// Get the current branch name for a repository.
@@ -488,6 +601,10 @@ pub fn find_git_repo_root(path: &str) -> Result<String, String> {
 
 /// Create a worktree at a specific custom path.
 /// Used by the Agent Manager to create worktrees inside task folders.
+///
+/// # Security
+/// This function validates that the destination path is within allowed directories
+/// to prevent path traversal attacks.
 pub fn create_worktree_at_path(
     repo_path: &str,
     destination_path: &str,
@@ -498,8 +615,12 @@ pub fn create_worktree_at_path(
         .map_err(|e| format!("Failed to resolve repo path: {}", e))?;
     let repo_path_str = repo_path_canonical.to_string_lossy().to_string();
 
-    // Ensure the parent directory exists
+    // Security: Validate destination path is within allowed directories
     let dest_path = Path::new(destination_path);
+    let allowed_bases = get_allowed_worktree_bases();
+    validate_path_within_bases(dest_path, &allowed_bases)?;
+
+    // Ensure the parent directory exists
     if let Some(parent) = dest_path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create parent directory: {}", e))?;
@@ -535,4 +656,89 @@ pub fn create_worktree_at_path(
         .to_string();
 
     Ok(created_path)
+}
+
+// ============ Async Versions ============
+// These versions use spawn_blocking to avoid blocking the Tauri main thread.
+
+/// List all worktrees for a repository (async version).
+/// Use this from Tauri commands to avoid freezing the UI.
+pub async fn list_worktrees_async(repo_path: String) -> Result<Vec<WorktreeInfo>, String> {
+    tokio::task::spawn_blocking(move || list_worktrees(&repo_path))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+/// Create a new worktree (async version).
+/// Use this from Tauri commands to avoid freezing the UI.
+pub async fn create_worktree_async(
+    repo_path: String,
+    name: String,
+    branch: Option<String>,
+    commit: Option<String>,
+    startup_script: Option<String>,
+    execute_script: bool,
+) -> Result<WorktreeInfo, String> {
+    tokio::task::spawn_blocking(move || {
+        create_worktree(
+            &repo_path,
+            &name,
+            branch.as_deref(),
+            commit.as_deref(),
+            startup_script.as_deref(),
+            execute_script,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
+}
+
+/// Remove a worktree (async version).
+/// Use this from Tauri commands to avoid freezing the UI.
+pub async fn remove_worktree_async(
+    path: String,
+    force: bool,
+    delete_branch: bool,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || remove_worktree(&path, force, delete_branch))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+/// Rename a worktree (async version).
+/// Use this from Tauri commands to avoid freezing the UI.
+pub async fn rename_worktree_async(old_path: String, new_name: String) -> Result<WorktreeInfo, String> {
+    tokio::task::spawn_blocking(move || rename_worktree(&old_path, &new_name))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+/// Get branches (async version).
+/// Use this from Tauri commands to avoid freezing the UI.
+pub async fn get_branches_async(repo_path: String) -> Result<Vec<BranchInfo>, String> {
+    tokio::task::spawn_blocking(move || get_branches(&repo_path))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+/// Get commits (async version).
+/// Use this from Tauri commands to avoid freezing the UI.
+pub async fn get_commits_async(repo_path: String, limit: usize) -> Result<Vec<CommitInfo>, String> {
+    tokio::task::spawn_blocking(move || get_commits(&repo_path, limit))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+/// Create worktree at a specific path (async version).
+/// Use this from Tauri commands to avoid freezing the UI.
+pub async fn create_worktree_at_path_async(
+    repo_path: String,
+    destination_path: String,
+    branch_or_commit: Option<String>,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        create_worktree_at_path(&repo_path, &destination_path, branch_or_commit.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }

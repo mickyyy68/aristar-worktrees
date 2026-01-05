@@ -2,6 +2,45 @@
 
 use std::process::Command;
 
+/// Validate a custom command to prevent command injection.
+/// Only allows absolute paths to known safe locations, no shell metacharacters.
+fn validate_custom_command(cmd: &str) -> Result<(), String> {
+    // Must be an absolute path
+    if !cmd.starts_with('/') {
+        return Err("Custom command must be an absolute path".to_string());
+    }
+
+    // Only allow commands from known safe locations
+    let allowed_prefixes = [
+        "/usr/bin/",
+        "/usr/local/bin/",
+        "/opt/homebrew/bin/",
+        "/Applications/",
+        "/System/Applications/",
+    ];
+
+    if !allowed_prefixes.iter().any(|p| cmd.starts_with(p)) {
+        return Err(format!(
+            "Custom command must be in one of: {:?}",
+            allowed_prefixes
+        ));
+    }
+
+    // Disallow shell metacharacters that could enable injection
+    let forbidden_chars = ['|', ';', '&', '$', '`', '(', ')', '{', '}', '\n', '\r', '<', '>'];
+    if cmd.chars().any(|c| forbidden_chars.contains(&c)) {
+        return Err("Custom command contains forbidden characters".to_string());
+    }
+
+    // Verify the path exists and is executable
+    let path = std::path::Path::new(cmd);
+    if !path.exists() {
+        return Err(format!("Custom command not found: {}", cmd));
+    }
+
+    Ok(())
+}
+
 /// Open a path in a terminal application.
 pub fn open_in_terminal(path: &str, app: &str, custom_command: Option<&str>) -> Result<(), String> {
     let escaped_path = path.replace('"', "\\\"");
@@ -111,6 +150,8 @@ pub fn open_in_terminal(path: &str, app: &str, custom_command: Option<&str>) -> 
         }
         "custom" => {
             if let Some(cmd) = custom_command {
+                // Validate custom command to prevent command injection
+                validate_custom_command(cmd)?;
                 Command::new(cmd)
                     .arg(path)
                     .spawn()
@@ -156,6 +197,8 @@ pub fn open_in_editor(path: &str, app: &str, custom_command: Option<&str>) -> Re
         }
         "custom" => {
             if let Some(cmd) = custom_command {
+                // Validate custom command to prevent command injection
+                validate_custom_command(cmd)?;
                 Command::new(cmd)
                     .arg(path)
                     .spawn()

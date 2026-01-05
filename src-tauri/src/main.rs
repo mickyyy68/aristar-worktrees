@@ -11,7 +11,7 @@ mod worktrees;
 mod tests;
 
 use std::fs;
-use tauri::Manager;
+use tauri::{Manager, RunEvent};
 
 fn main() {
     println!("[main] Starting Aristar Worktrees...");
@@ -25,7 +25,7 @@ fn main() {
         }
     }
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(worktrees::init_store())
         .manage(agent_manager::OpenCodeManager::new())
@@ -86,14 +86,19 @@ fn main() {
             println!("[main] App setup completed");
             Ok(())
         })
-        .on_window_event(|_app, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                if let Some(manager) = _app.try_state::<agent_manager::OpenCodeManager>() {
-                    println!("[main] Cleaning up OpenCode processes...");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        match event {
+            RunEvent::Exit => {
+                println!("[main] App exiting, cleaning up OpenCode processes...");
+                if let Some(manager) = app_handle.try_state::<agent_manager::OpenCodeManager>() {
                     manager.stop_all();
                 }
+                println!("[main] Cleanup complete");
             }
-        })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+            _ => {}
+        }
+    });
 }

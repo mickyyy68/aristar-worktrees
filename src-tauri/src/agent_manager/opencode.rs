@@ -7,10 +7,118 @@ use portpicker::pick_unused_port;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
+
+use crate::core::get_aristar_worktrees_base;
+
+// ============ PID File Management ============
+
+/// Get the path to the PID tracking file.
+fn get_pid_file_path() -> PathBuf {
+    get_aristar_worktrees_base().join("opencode.pids")
+}
+
+/// Save a PID to the tracking file.
+fn save_pid(pid: u32, worktree_path: &Path, port: u16) {
+    let pid_file = get_pid_file_path();
+    
+    // Create parent directory if needed
+    if let Some(parent) = pid_file.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    
+    // Append PID entry
+    if let Ok(mut file) = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&pid_file)
+    {
+        let entry = format!("{}|{}|{}\n", pid, port, worktree_path.display());
+        let _ = file.write_all(entry.as_bytes());
+        println!("[opencode] Tracked PID {} in {}", pid, pid_file.display());
+    }
+}
+
+/// Remove a PID from the tracking file.
+fn remove_pid(pid: u32) {
+    let pid_file = get_pid_file_path();
+    
+    if !pid_file.exists() {
+        return;
+    }
+    
+    // Read all entries, filter out the one to remove, rewrite file
+    if let Ok(file) = fs::File::open(&pid_file) {
+        let reader = BufReader::new(file);
+        let remaining: Vec<String> = reader
+            .lines()
+            .map_while(Result::ok)
+            .filter(|line| {
+                !line.starts_with(&format!("{}|", pid))
+            })
+            .collect();
+        
+        if let Ok(mut file) = fs::File::create(&pid_file) {
+            for line in remaining {
+                let _ = writeln!(file, "{}", line);
+            }
+        }
+    }
+}
+
+/// Clean up processes tracked in the PID file.
+/// Returns the number of processes killed.
+fn cleanup_tracked_pids() -> u32 {
+    let pid_file = get_pid_file_path();
+    
+    if !pid_file.exists() {
+        return 0;
+    }
+    
+    let mut killed = 0;
+    
+    if let Ok(file) = fs::File::open(&pid_file) {
+        let reader = BufReader::new(file);
+        
+        for line in reader.lines().map_while(Result::ok) {
+            let parts: Vec<&str> = line.split('|').collect();
+            if let Some(pid_str) = parts.first() {
+                if let Ok(pid) = pid_str.parse::<i32>() {
+                    // Check if process is still running and kill it
+                    #[cfg(unix)]
+                    {
+                        use std::process::Command;
+                        // Check if process exists
+                        let check = Command::new("kill")
+                            .args(["-0", &pid.to_string()])
+                            .output();
+                        
+                        if check.map(|o| o.status.success()).unwrap_or(false) {
+                            // Process exists, kill it
+                            let kill_result = Command::new("kill")
+                                .args(["-9", &pid.to_string()])
+                                .output();
+                            
+                            if kill_result.map(|o| o.status.success()).unwrap_or(false) {
+                                println!("[opencode] Killed tracked orphan PID {}", pid);
+                                killed += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Clear the PID file after cleanup
+    let _ = fs::write(&pid_file, "");
+    
+    killed
+}
 
 fn find_opencode_binary() -> Option<PathBuf> {
     let standard_path = home_dir()?.join(".opencode").join("bin").join("opencode");
@@ -119,6 +227,10 @@ impl OpenCodeManager {
                 )
             })?;
 
+        // Track the PID for orphan cleanup on crash
+        let pid = child.id();
+        save_pid(pid, &worktree_path, port);
+
         instances.insert(
             worktree_path.clone(),
             OpenCodeInstance {
@@ -128,7 +240,7 @@ impl OpenCodeManager {
             },
         );
 
-        println!("[opencode] Server started successfully on port {}", port);
+        println!("[opencode] Server started successfully on port {} (PID: {})", port, pid);
         Ok(port)
     }
 
@@ -137,6 +249,10 @@ impl OpenCodeManager {
         let mut instances = self.instances.lock().map_err(|e| e.to_string())?;
 
         if let Some(mut instance) = instances.remove(worktree_path) {
+            // Remove PID from tracking before killing
+            let pid = instance.process.id();
+            remove_pid(pid);
+            
             println!(
                 "[opencode] Stopping server on port {} for worktree: {}",
                 instance.port,
@@ -168,6 +284,10 @@ impl OpenCodeManager {
     pub fn stop_all(&self) {
         if let Ok(mut instances) = self.instances.lock() {
             for (path, mut instance) in instances.drain() {
+                // Remove PID from tracking
+                let pid = instance.process.id();
+                remove_pid(pid);
+                
                 println!(
                     "[opencode] Stopping server on port {} during cleanup",
                     instance.port
@@ -199,14 +319,26 @@ impl OpenCodeManager {
     }
 
     /// Clean up orphaned OpenCode processes from previous crashes.
-    /// This uses pkill to find and terminate any leftover `opencode serve` processes.
+    /// 
+    /// This uses a two-phase approach:
+    /// 1. First, clean up processes tracked in our PID file (safe, targeted)
+    /// 2. Fall back to pattern matching only if PID-based cleanup fails
     pub fn cleanup_orphaned_processes() -> u32 {
         use std::process::Command;
 
         println!("[opencode] Checking for orphaned OpenCode processes...");
 
+        // Phase 1: Clean up tracked PIDs (safe, targeted approach)
+        let tracked_killed = cleanup_tracked_pids();
+        if tracked_killed > 0 {
+            println!(
+                "[opencode] Cleaned up {} tracked orphan process(es)",
+                tracked_killed
+            );
+        }
+
+        // Phase 2: Check for any remaining processes not in our tracking
         // Use pgrep to find processes, then kill them
-        // This is safer than pkill as we can count them first
         let pgrep_output = Command::new("pgrep")
             .args(["-f", "opencode serve"])
             .output();
@@ -219,36 +351,40 @@ impl OpenCodeManager {
 
                 if count > 0 {
                     println!(
-                        "[opencode] Found {} orphaned process(es), cleaning up...",
+                        "[opencode] Found {} additional orphaned process(es) via pgrep...",
                         count
                     );
 
-                    // Kill the processes
-                    let kill_result = Command::new("pkill").args(["-f", "opencode serve"]).output();
-
-                    match kill_result {
-                        Ok(status) if status.status.success() => {
-                            println!("[opencode] Successfully cleaned up {} orphaned process(es)", count);
-                        }
-                        Ok(_) => {
-                            println!("[opencode] pkill completed (some processes may have already exited)");
-                        }
-                        Err(e) => {
-                            println!("[opencode] Warning: Failed to run pkill: {}", e);
+                    // Kill specific PIDs instead of using pkill pattern
+                    let mut killed = 0;
+                    for pid in &pids {
+                        let kill_result = Command::new("kill")
+                            .args(["-9", pid])
+                            .output();
+                        
+                        if kill_result.map(|o| o.status.success()).unwrap_or(false) {
+                            killed += 1;
                         }
                     }
+                    
+                    println!(
+                        "[opencode] Killed {} of {} remaining orphan process(es)",
+                        killed, count
+                    );
                 }
 
-                count
+                tracked_killed + count
             }
             Ok(_) => {
                 // pgrep found no processes (exit code 1)
-                println!("[opencode] No orphaned processes found");
-                0
+                if tracked_killed == 0 {
+                    println!("[opencode] No orphaned processes found");
+                }
+                tracked_killed
             }
             Err(e) => {
                 println!("[opencode] Warning: Failed to check for orphaned processes: {}", e);
-                0
+                tracked_killed
             }
         }
     }
@@ -266,5 +402,15 @@ impl OpenCodeManager {
         } else {
             false
         }
+    }
+}
+
+/// Implement Drop to ensure cleanup even on panic or unexpected shutdown.
+/// This provides a safety net for process cleanup when the manager is dropped.
+impl Drop for OpenCodeManager {
+    fn drop(&mut self) {
+        println!("[opencode] OpenCodeManager dropping, cleaning up processes...");
+        self.stop_all();
+        println!("[opencode] OpenCodeManager cleanup complete");
     }
 }
