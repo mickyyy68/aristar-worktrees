@@ -1,17 +1,19 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Repository, AppSettings } from '@/store/types';
-import * as commands from '@/lib/commands';
+import type { Repository, AppSettings, ActiveView } from '@/store/types';
+import { commands } from '@core/lib';
 
 interface AppState {
   repositories: Repository[];
   settings: AppSettings;
   selectedRepositoryId: string | null;
+  activeView: ActiveView;
   isLoading: boolean;
   error: string | null;
   
   setSettings: (settings: Partial<AppSettings>) => void;
   setSelectedRepository: (id: string | null) => void;
+  setActiveView: (view: ActiveView) => void;
   
   loadRepositories: () => Promise<void>;
   addRepository: (path: string) => Promise<void>;
@@ -41,10 +43,19 @@ interface AppState {
 }
 
 const defaultSettings: AppSettings = {
-  theme: 'system',
+  themeName: 'aristar',
+  colorScheme: 'system',
   autoRefresh: true,
   terminalApp: 'terminal',
   editorApp: 'vscode',
+  toolDisplay: {
+    expandToolsByDefault: false,
+    showToolCommands: false,
+    outputVisibility: 'hidden',
+    truncatedOutputLines: 10,
+  },
+  sidebarCollapsed: false,
+  optimizationModel: undefined,
 };
 
 export const useAppStore = create<AppState>()(
@@ -53,8 +64,13 @@ export const useAppStore = create<AppState>()(
       repositories: [],
       settings: defaultSettings,
       selectedRepositoryId: null,
+      activeView: 'worktrees',
       isLoading: false,
       error: null,
+
+      setActiveView: (view) => {
+        set({ activeView: view });
+      },
 
       setSettings: (newSettings) => {
         set((state) => ({
@@ -79,9 +95,7 @@ export const useAppStore = create<AppState>()(
       addRepository: async (path) => {
         set({ isLoading: true, error: null });
         try {
-          console.log('[addRepository] Calling add_repository with path:', path);
           const repo = await commands.addRepository(path);
-          console.log('[addRepository] Success:', repo);
           set((state) => ({
             repositories: [...state.repositories, repo],
             isLoading: false,
@@ -270,6 +284,7 @@ export const useAppStore = create<AppState>()(
         repositories: state.repositories,
         settings: state.settings,
         selectedRepositoryId: state.selectedRepositoryId,
+        activeView: state.activeView,
       }),
     }
   )

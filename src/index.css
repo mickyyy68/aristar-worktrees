@@ -2,112 +2,65 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Theme CSS Variables
+ *
+ * Theme-specific CSS variables (colors, fonts, shadows, etc.) are injected
+ * dynamically by the useTheme hook from the theme definitions in
+ * src/modules/core/lib/themes/
+ *
+ * The :root section below provides fallback values that will be overwritten
+ * when the app loads and the theme system initializes.
+ */
+
 :root {
-  --background: hsl(330 47.0588% 93.3333%);
-  --foreground: hsl(0 0% 35.6863%);
-  --card: hsl(41.5385 92.8571% 89.0196%);
-  --card-foreground: hsl(0 0% 35.6863%);
+  /* Fallback values - will be overwritten by theme system */
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(0 0% 0%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(0 0% 0%);
   --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(0 0% 35.6863%);
-  --primary: hsl(325.5814 57.8475% 56.2745%);
+  --popover-foreground: hsl(0 0% 0%);
+  --primary: hsl(0 0% 0%);
   --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(181.6901 43.5583% 68.0392%);
-  --secondary-foreground: hsl(0 0% 20%);
-  --muted: hsl(190.5263 58.7629% 80.9804%);
-  --muted-foreground: hsl(0 0% 47.8431%);
-  --accent: hsl(42.1429 91.3043% 81.9608%);
-  --accent-foreground: hsl(0 0% 20%);
-  --destructive: hsl(359.5652 92.0000% 70.5882%);
+  --secondary: hsl(0 0% 90%);
+  --secondary-foreground: hsl(0 0% 0%);
+  --muted: hsl(0 0% 95%);
+  --muted-foreground: hsl(0 0% 40%);
+  --accent: hsl(0 0% 90%);
+  --accent-foreground: hsl(0 0% 0%);
+  --destructive: hsl(0 70% 50%);
   --destructive-foreground: hsl(0 0% 100%);
-  --border: hsl(325.5814 57.8475% 56.2745%);
-  --input: hsl(0 0% 89.4118%);
-  --ring: hsl(330 70.2381% 67.0588%);
-  --chart-1: hsl(330 70.2381% 67.0588%);
-  --chart-2: hsl(190.2128 61.8421% 70.1961%);
-  --chart-3: hsl(42.1429 91.3043% 81.9608%);
-  --chart-4: hsl(329.6386 77.5701% 79.0196%);
-  --chart-5: hsl(330.6294 64.1256% 56.2745%);
-  --sidebar: hsl(326.2500 69.5652% 90.9804%);
-  --sidebar-foreground: hsl(0 0% 20%);
-  --sidebar-primary: hsl(330.3659 81.1881% 60.3922%);
+  --border: hsl(0 0% 85%);
+  --input: hsl(0 0% 90%);
+  --ring: hsl(0 0% 0%);
+  --chart-1: hsl(0 0% 60%);
+  --chart-2: hsl(0 0% 50%);
+  --chart-3: hsl(0 0% 40%);
+  --chart-4: hsl(0 0% 30%);
+  --chart-5: hsl(0 0% 20%);
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(0 0% 0%);
+  --sidebar-primary: hsl(0 0% 0%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(327.4074 87.0968% 81.7647%);
-  --sidebar-accent-foreground: hsl(0 0% 20%);
-  --sidebar-border: hsl(268.6957 100.0000% 95.4902%);
-  --sidebar-ring: hsl(330.3659 81.1881% 60.3922%);
-  --font-sans: Poppins, sans-serif;
-  --font-serif: Lora, serif;
-  --font-mono: Fira Code, monospace;
-  --radius: 0.4rem;
-  --shadow-x: 3px;
-  --shadow-y: 3px;
-  --shadow-blur: 0px;
-  --shadow-spread: 0px;
-  --shadow-opacity: 1.0;
-  --shadow-color: hsl(325.78 58.18% 56.86% / 0.5);
-  --shadow-2xs: 3px 3px 0px 0px hsl(325.7800 58.1800% 56.8600% / 0.50);
-  --shadow-xs: 3px 3px 0px 0px hsl(325.7800 58.1800% 56.8600% / 0.50);
-  --shadow-sm: 3px 3px 0px 0px hsl(325.7800 58.1800% 56.8600% / 1.00), 3px 1px 2px -1px hsl(325.7800 58.1800% 56.8600% / 1.00);
-  --shadow: 3px 3px 0px 0px hsl(325.7800 58.1800% 56.8600% / 1.00), 3px 1px 2px -1px hsl(325.7800 58.1800% 56.8600% / 1.00);
-  --shadow-md: 3px 3px 0px 0px hsl(325.7800 58.1800% 56.8600% / 1.00), 3px 2px 4px -1px hsl(325.7800 58.1800% 56.8600% / 1.00);
-  --shadow-lg: 3px 3px 0px 0px hsl(325.7800 58.1800% 56.8600% / 1.00), 3px 4px 6px -1px hsl(325.7800 58.1800% 56.8600% / 1.00);
-  --shadow-xl: 3px 3px 0px 0px hsl(325.7800 58.1800% 56.8600% / 1.00), 3px 8px 10px -1px hsl(325.7800 58.1800% 56.8600% / 1.00);
-  --shadow-2xl: 3px 3px 0px 0px hsl(325.7800 58.1800% 56.8600% / 2.50);
+  --sidebar-accent: hsl(0 0% 90%);
+  --sidebar-accent-foreground: hsl(0 0% 0%);
+  --sidebar-border: hsl(0 0% 90%);
+  --sidebar-ring: hsl(0 0% 0%);
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --font-serif: ui-serif, Georgia, serif;
+  --font-mono: ui-monospace, monospace;
+  --radius: 0.5rem;
+  --shadow-2xs: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
+  --shadow-xs: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
+  --shadow-sm: 0 1px 3px 0 hsl(0 0% 0% / 0.1);
+  --shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.1);
+  --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.1);
+  --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.1);
+  --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.1);
+  --shadow-2xl: 0 25px 50px -12px hsl(0 0% 0% / 0.25);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
-}
-
-.dark {
-  --background: hsl(201.4286 43.7500% 12.5490%);
-  --foreground: hsl(333.7500 40.0000% 92.1569%);
-  --card: hsl(201.4286 33.3333% 16.4706%);
-  --card-foreground: hsl(333.7500 40.0000% 92.1569%);
-  --popover: hsl(201.4286 33.3333% 16.4706%);
-  --popover-foreground: hsl(333.7500 40.0000% 92.1569%);
-  --primary: hsl(42.1429 91.3043% 81.9608%);
-  --primary-foreground: hsl(201.4286 43.7500% 12.5490%);
-  --secondary: hsl(346.3636 55.0000% 76.4706%);
-  --secondary-foreground: hsl(201.4286 43.7500% 12.5490%);
-  --muted: hsl(214.2857 8.8608% 15.4902%);
-  --muted-foreground: hsl(346.3636 55.0000% 76.4706%);
-  --accent: hsl(338.4000 39.6825% 62.9412%);
-  --accent-foreground: hsl(333.7500 40.0000% 92.1569%);
-  --destructive: hsl(328.4211 70.3704% 62.9412%);
-  --destructive-foreground: hsl(201.4286 43.7500% 12.5490%);
-  --border: hsl(206.1538 28.0576% 27.2549%);
-  --input: hsl(200.6897 31.1828% 18.2353%);
-  --ring: hsl(184.1176 41.1290% 51.3725%);
-  --chart-1: hsl(184.1176 41.1290% 51.3725%);
-  --chart-2: hsl(346.3636 55.0000% 76.4706%);
-  --chart-3: hsl(338.4000 39.6825% 62.9412%);
-  --chart-4: hsl(191.2941 64.8855% 25.6863%);
-  --chart-5: hsl(214.2857 8.8608% 15.4902%);
-  --sidebar: hsl(202.5000 42.8571% 10.9804%);
-  --sidebar-foreground: hsl(220.0000 14.2857% 95.8824%);
-  --sidebar-primary: hsl(330.3659 81.1881% 60.3922%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(327.4074 87.0968% 81.7647%);
-  --sidebar-accent-foreground: hsl(215.0000 27.9070% 16.8627%);
-  --sidebar-border: hsl(216.9231 19.1176% 26.6667%);
-  --sidebar-ring: hsl(330.3659 81.1881% 60.3922%);
-  --font-sans: Poppins, sans-serif;
-  --font-serif: Lora, serif;
-  --font-mono: Fira Code, monospace;
-  --radius: 0.4rem;
-  --shadow-x: 3px;
-  --shadow-y: 3px;
-  --shadow-blur: 0px;
-  --shadow-spread: 0px;
-  --shadow-opacity: 1.0;
-  --shadow-color: #324859;
-  --shadow-2xs: 3px 3px 0px 0px hsl(206.1538 28.0576% 27.2549% / 0.50);
-  --shadow-xs: 3px 3px 0px 0px hsl(206.1538 28.0576% 27.2549% / 0.50);
-  --shadow-sm: 3px 3px 0px 0px hsl(206.1538 28.0576% 27.2549% / 1.00), 3px 1px 2px -1px hsl(206.1538 28.0576% 27.2549% / 1.00);
-  --shadow: 3px 3px 0px 0px hsl(206.1538 28.0576% 27.2549% / 1.00), 3px 1px 2px -1px hsl(206.1538 28.0576% 27.2549% / 1.00);
-  --shadow-md: 3px 3px 0px 0px hsl(206.1538 28.0576% 27.2549% / 1.00), 3px 2px 4px -1px hsl(206.1538 28.0576% 27.2549% / 1.00);
-  --shadow-lg: 3px 3px 0px 0px hsl(206.1538 28.0576% 27.2549% / 1.00), 3px 4px 6px -1px hsl(206.1538 28.0576% 27.2549% / 1.00);
-  --shadow-xl: 3px 3px 0px 0px hsl(206.1538 28.0576% 27.2549% / 1.00), 3px 8px 10px -1px hsl(206.1538 28.0576% 27.2549% / 1.00);
-  --shadow-2xl: 3px 3px 0px 0px hsl(206.1538 28.0576% 27.2549% / 2.50);
 }
 
 @theme inline {
@@ -181,3 +134,4 @@
     font-family: var(--font-serif);
   }
 }
+

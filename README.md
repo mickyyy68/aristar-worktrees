@@ -1,3 +1,7 @@
+<center>
+  <img src="icon.png" alt="Aristar Worktrees" width="128" />
+</center>
+
 # Aristar Worktrees
 
 A beautiful Tauri application for managing Git worktrees with a modern UI.

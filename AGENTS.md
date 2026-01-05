@@ -1,6 +1,24 @@
+This is a very lengthy task. It's recommended that you make full use of the complete output context to handle it—keep the total input and output tokens within 200k tokens. Make full use of the context window length to complete the task thoroughly and avoid exhausting tokens.
+
 # AGENTS.md - Coding Agent Guidelines
 
 This document provides guidelines for AI coding agents working on the Aristar Worktrees codebase.
+
+## Critical Guidelines
+
+**MUST**: Keep documentation updated when making changes:
+- Update **AGENTS.md** when changing build commands, project structure, or conventions
+- Update the **README.md** of any module you modify (structure, APIs, types, etc.)
+
+**MUST**: Read the README.md of the module you're working on before making changes:
+- `src-tauri/README.md` - Rust backend overview
+- `src-tauri/src/core/README.md` - Core module (persistence, system ops)
+- `src-tauri/src/worktrees/README.md` - Worktrees module
+- `src-tauri/src/agent_manager/README.md` - Agent manager module
+- `src-tauri/src/tests/README.md` - Testing conventions
+- `src/modules/core/README.md` - Frontend core (UI, utils, commands)
+- `src/modules/worktrees/README.md` - Frontend worktrees
+- `src/modules/agent-manager/README.md` - Frontend agent manager
 
 ## Build & Development Commands
 
@@ -40,9 +58,10 @@ cargo test
 cargo test test_get_repository_name_simple_path
 
 # Run tests in a specific module
-cargo test worktree_unit_tests
-cargo test state_tests
-cargo test worktree_integration_tests
+cargo test tests::worktrees::operations_tests
+cargo test tests::worktrees::store_tests
+cargo test tests::worktrees::integration_tests
+cargo test tests::agent_manager::task_tests
 
 # Run tests with output
 cargo test -- --nocapture
@@ -54,134 +73,36 @@ cargo fmt
 cargo clippy
 ```
 
-## Project Structure
+## Path Aliases (TypeScript)
 
-```
-src/                     # React frontend (TypeScript)
-├── components/          # React components
-│   ├── ui/              # shadcn/ui base components (don't modify)
-│   └── *.tsx            # App components
-├── lib/                 # Utilities and helpers
-├── store/               # Zustand state management
-└── assets/              # Static assets
-
-src-tauri/src/           # Rust backend
-├── commands/            # Tauri command handlers
-│   ├── mod.rs           # Command definitions
-│   ├── worktree.rs      # Git operations
-│   └── tests/           # Test modules
-└── main.rs              # App entry point
-```
-
-## Code Style Guidelines
-
-### TypeScript/React
-
-**Imports** - Order imports as follows:
-1. React imports (`import { useState } from 'react'`)
-2. External libraries (`import { open } from '@tauri-apps/plugin-dialog'`)
-3. UI components (`import { Button } from '@/components/ui/button'`)
-4. App components (`import { Header } from '@/components/header'`)
-5. Store/hooks (`import { useAppStore } from '@/store/use-app-store'`)
-6. Utils (`import { cn } from '@/lib/utils'`)
-7. Types (`import type { WorktreeMetadata } from '@/store/types'`)
-
-**Path Aliases** - Always use `@/` alias for imports from `src/`:
 ```typescript
-// Good
-import { Button } from '@/components/ui/button';
-
-// Bad
-import { Button } from '../../components/ui/button';
+import { Button } from '@core/ui';
+import { cn } from '@core/lib';
+import { WorktreeCard } from '@worktrees/components';
+import { ChatView } from '@agent-manager/components/chat';
+import { useAppStore } from '@/store/use-app-store';
 ```
 
-**Component Structure**:
-```typescript
-'use client';  // Only if needed for client-side hooks
+| Alias | Target |
+|-------|--------|
+| `@core/*` | `src/modules/core/*` |
+| `@worktrees/*` | `src/modules/worktrees/*` |
+| `@agent-manager/*` | `src/modules/agent-manager/*` |
+| `@/*` | `src/*` |
 
-import { useState } from 'react';
-// ... other imports
+## Code Style Quick Reference
 
-interface ComponentProps {
-  prop: string;
-}
-
-export function Component({ prop }: ComponentProps) {
-  const [state, setState] = useState('');
-  // ... component logic
-  return <div>{/* JSX */}</div>;
-}
-```
-
-**Naming Conventions**:
-- Components: PascalCase (`WorktreeCard`, `SettingsDialog`)
-- Files: kebab-case (`worktree-card.tsx`, `settings-dialog.tsx`)
-- Hooks: camelCase with `use` prefix (`useAppStore`)
-- Types/Interfaces: PascalCase (`WorktreeMetadata`, `AppSettings`)
-- Constants: SCREAMING_SNAKE_CASE for true constants
-
-**Types**:
-- Use `interface` for object shapes, `type` for unions/aliases
-- Export types from `src/store/types.ts`
-- Use `type` imports: `import type { X } from '...'`
+### TypeScript
+- Components: PascalCase (`WorktreeCard`)
+- Files: kebab-case (`worktree-card.tsx`)
+- Use `interface` for objects, `type` for unions
+- Use `import type` for type-only imports
 
 ### Rust
-
-**Naming Conventions**:
 - Functions: snake_case (`get_repository_name`)
 - Structs: PascalCase (`WorktreeInfo`)
-- Constants: SCREAMING_SNAKE_CASE
-- Modules: snake_case
-
-**Error Handling**:
 - Tauri commands return `Result<T, String>`
-- Use `.map_err(|e| e.to_string())?` for error conversion
-- Provide descriptive error messages
-
-**Command Pattern**:
-```rust
-#[tauri::command]
-pub fn command_name(
-    state: State<AppState>,
-    param: String,
-) -> Result<ReturnType, String> {
-    // Implementation
-    Ok(result)
-}
-```
-
-**Testing**:
-- Place tests in `src/commands/tests/`
-- Use `TestRepo` helper for git repository fixtures
-- Name tests descriptively: `test_<function>_<scenario>`
-
-## UI Components
-
-Use **shadcn/ui** components from `src/components/ui/`. These are pre-configured with Radix UI and Tailwind CSS.
-
-Available components: `Button`, `Card`, `Dialog`, `DropdownMenu`, `Input`, `Label`, `ScrollArea`, `Select`, `Separator`, `Switch`, `Textarea`, `Tooltip`
-
-**Styling**: Use Tailwind CSS classes. Use `cn()` utility for conditional classes:
-```typescript
-import { cn } from '@/lib/utils';
-<div className={cn('base-class', condition && 'conditional-class')} />
-```
-
-## State Management
-
-Use Zustand store (`useAppStore`) for global state. Settings are persisted to localStorage.
-
-```typescript
-const { repositories, settings, addRepository } = useAppStore();
-```
-
-## Tauri Commands
-
-Call Rust backend via `src/lib/commands.ts`:
-```typescript
-import * as commands from '@/lib/commands';
-const repos = await commands.getRepositories();
-```
+- Tests go in `src-tauri/src/tests/`
 
 ## Important Notes
 

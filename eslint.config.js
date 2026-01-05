@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint'
 
 export default [
   {
-    ignores: ['**/target/**', '**/src-tauri/target/**'],
+    ignores: ['**/target/**', '**/src-tauri/target/**', '**/dist/**'],
   },
   {
     files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
