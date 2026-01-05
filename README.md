@@ -1,6 +1,6 @@
-<center>
+<div align="center">
   <img src="icon.png" alt="Aristar Worktrees" width="128" />
-</center>
+</div>
 
 # Aristar Worktrees
 
