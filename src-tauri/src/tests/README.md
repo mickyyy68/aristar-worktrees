@@ -114,7 +114,17 @@ State management tests:
 | `test_init_store_*` | Store initialization |
 | `test_store_data_*` | Repository CRUD |
 | `test_repository_*` | Worktree management within repos |
-| `test_state_mutex_*` | Concurrency safety |
+| `test_state_rwlock_*` | RwLock concurrency safety |
+
+### Security Tests (`worktrees/security_tests.rs`)
+
+Security validation tests:
+
+| Test | Description |
+|------|-------------|
+| `test_validate_custom_command_*` | Command injection prevention |
+| `test_validate_path_within_bases_*` | Path traversal prevention |
+| `test_get_allowed_worktree_bases_*` | Allowed base directory validation |
 
 ### Integration Tests (`worktrees/integration_tests.rs`)
 
@@ -139,6 +149,16 @@ Task manager utilities:
 | `test_generate_task_id_*` | ID generation |
 | `test_slugify_*` | Name slugification |
 | `test_slugify_model_id_*` | Model ID slugification |
+
+### OpenCode Tests (`agent_manager/opencode_tests.rs`)
+
+OpenCode process management tests:
+
+| Test | Description |
+|------|-------------|
+| `test_get_pid_file_path_*` | PID file path validation |
+| `test_save_pid_*` | PID file write operations |
+| `test_remove_pid_*` | PID file entry removal |
 
 ## Writing New Tests
 
@@ -195,11 +215,13 @@ fn test_with_multiple_branches() {
 
 ## Test Count
 
-Current test count: **54 tests**
+Current test count: **92 tests**
 
 ```
 tests::agent_manager::task_tests: 9 tests
+tests::agent_manager::opencode_tests: 12 tests
 tests::worktrees::operations_tests: 20 tests
-tests::worktrees::store_tests: 9 tests
+tests::worktrees::store_tests: 10 tests
+tests::worktrees::security_tests: 25 tests
 tests::worktrees::integration_tests: 16 tests
 ```

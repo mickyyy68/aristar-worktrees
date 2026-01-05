@@ -4,7 +4,14 @@ use std::process::Command;
 
 /// Validate a custom command to prevent command injection.
 /// Only allows absolute paths to known safe locations, no shell metacharacters.
-fn validate_custom_command(cmd: &str) -> Result<(), String> {
+///
+/// # Security
+/// This function prevents command injection attacks by:
+/// 1. Requiring absolute paths
+/// 2. Restricting to known safe directories
+/// 3. Blocking shell metacharacters
+/// 4. Verifying the path exists
+pub fn validate_custom_command(cmd: &str) -> Result<(), String> {
     // Must be an absolute path
     if !cmd.starts_with('/') {
         return Err("Custom command must be an absolute path".to_string());

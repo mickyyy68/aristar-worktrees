@@ -18,12 +18,13 @@ use crate::core::get_aristar_worktrees_base;
 // ============ PID File Management ============
 
 /// Get the path to the PID tracking file.
-fn get_pid_file_path() -> PathBuf {
+pub(crate) fn get_pid_file_path() -> PathBuf {
     get_aristar_worktrees_base().join("opencode.pids")
 }
 
 /// Save a PID to the tracking file.
-fn save_pid(pid: u32, worktree_path: &Path, port: u16) {
+/// Format: PID|PORT|WORKTREE_PATH
+pub(crate) fn save_pid(pid: u32, worktree_path: &Path, port: u16) {
     let pid_file = get_pid_file_path();
     
     // Create parent directory if needed
@@ -44,7 +45,7 @@ fn save_pid(pid: u32, worktree_path: &Path, port: u16) {
 }
 
 /// Remove a PID from the tracking file.
-fn remove_pid(pid: u32) {
+pub(crate) fn remove_pid(pid: u32) {
     let pid_file = get_pid_file_path();
     
     if !pid_file.exists() {
@@ -72,7 +73,7 @@ fn remove_pid(pid: u32) {
 
 /// Clean up processes tracked in the PID file.
 /// Returns the number of processes killed.
-fn cleanup_tracked_pids() -> u32 {
+pub(crate) fn cleanup_tracked_pids() -> u32 {
     let pid_file = get_pid_file_path();
     
     if !pid_file.exists() {
