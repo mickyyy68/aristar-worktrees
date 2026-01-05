@@ -159,6 +159,7 @@ pub fn run_git_command(args: &[&str], cwd: &str) -> Result<std::process::Output,
 
 /// Run a git command asynchronously without blocking the Tauri main thread.
 /// This wraps the blocking git command in tokio::task::spawn_blocking.
+#[allow(dead_code)]
 pub async fn run_git_command_async(
     args: Vec<String>,
     cwd: String,
@@ -731,6 +732,7 @@ pub async fn get_commits_async(repo_path: String, limit: usize) -> Result<Vec<Co
 
 /// Create worktree at a specific path (async version).
 /// Use this from Tauri commands to avoid freezing the UI.
+#[allow(dead_code)]
 pub async fn create_worktree_at_path_async(
     repo_path: String,
     destination_path: String,

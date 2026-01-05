@@ -268,7 +268,7 @@ pub fn delete_task_impl(
         for agent in &task.agents {
             if std::path::Path::new(&agent.worktree_path).exists() {
                 // Try to remove the worktree using git, ignore errors
-                let _ = worktree_ops::remove_worktree(&agent.worktree_path, true, false);
+                let _ = worktree_ops::remove_worktree(&agent.worktree_path, true, true);
             }
         }
 

@@ -96,7 +96,7 @@ pub fn remove_agent_from_task_impl(
 
     // Delete worktree if requested
     if delete_worktree && std::path::Path::new(&worktree_path).exists() {
-        worktree_ops::remove_worktree(&worktree_path, true, false)?;
+        worktree_ops::remove_worktree(&worktree_path, true, true)?;
     }
 
     state.save()?;
@@ -308,7 +308,7 @@ pub fn cleanup_unaccepted_agents_impl(
     // Remove worktrees
     for (_, worktree_path) in &agents_to_cleanup {
         if std::path::Path::new(worktree_path).exists() {
-            let _ = worktree_ops::remove_worktree(worktree_path, true, false);
+            let _ = worktree_ops::remove_worktree(worktree_path, true, true);
         }
     }
 

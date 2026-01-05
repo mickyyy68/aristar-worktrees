@@ -56,6 +56,7 @@ impl TestRepo {
     }
 
     /// Creates a new commit with a given message.
+    #[allow(dead_code)]
     pub fn commit(&self, message: &str) {
         let file_path = self
             .path()
@@ -76,6 +77,7 @@ impl TestRepo {
     }
 
     /// Gets the current branch name.
+    #[allow(dead_code)]
     pub fn current_branch(&self) -> String {
         let output = Command::new("git")
             .args(["symbolic-ref", "--short", "HEAD"])
