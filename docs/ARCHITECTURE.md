@@ -331,3 +331,34 @@ The `repo-hash` is the first 8 hex characters of the SHA256 hash of the reposito
 2. **Optimistic Updates**: UI updated before backend confirmation
 3. **Debounced Persistence**: Store saves batched to reduce I/O
 4. **Single Instance Terminals**: Ghostty/Kitty reuse existing instances
+
+## Storage Locations
+
+All application data is stored in `~/.aristar-worktrees/`:
+
+| Data | Location | Description |
+|------|----------|-------------|
+| Repository metadata | `~/.aristar-worktrees/store.json` | Repositories, worktrees, and settings |
+| Task data | `~/.aristar-worktrees/tasks.json` | Agent manager tasks and agents |
+| Repository worktrees | `~/.aristar-worktrees/{repo-hash}/` | Worktrees organized by repository hash |
+| Task worktrees | `~/.aristar-worktrees/tasks/{task-id}/` | Agent worktrees for each task |
+
+### Worktree Storage Structure
+
+```
+~/.aristar-worktrees/
+├── store.json                    # AppState: repositories + settings
+├── tasks.json                    # TaskManagerState: tasks + agents
+├── tasks/                        # Task worktrees
+│   └── {task-id}/
+│       └── {agent-id}/           # Agent worktree (e.g., agent-1)
+│           └── .aristar-task-info.json
+├── a1b2c3d4/                     # Hash of /path/to/repo
+│   ├── .aristar-repo-info.json   # Original repo path
+│   ├── feature-branch/           # Worktree for feature-branch
+│   └── bugfix/                   # Worktree for bugfix branch
+└── e5f6g7h8/                     # Hash of another repo
+    └── ...
+```
+
+The `repo-hash` is the first 8 hex characters of the SHA256 hash of the repository path.

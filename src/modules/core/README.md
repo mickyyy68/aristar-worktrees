@@ -38,7 +38,8 @@ core/
 │   │   ├── aristar.ts     # Aristar theme (default)
 │   │   ├── claude.ts      # Claude-inspired theme
 │   │   ├── vercel.ts      # Vercel-inspired theme
-│   │   └── nature.ts      # Nature-inspired theme
+│   │   ├── nature.ts      # Nature-inspired theme
+│   │   └── t3-chat.ts     # T3 Chat theme
 │   └── index.ts
 ├── hooks/
 │   ├── use-theme.ts       # Theme management hook
@@ -274,6 +275,7 @@ The application supports a comprehensive theme system with multiple themes, each
 | `claude` | Warm, earthy tones inspired by Anthropic Claude |
 | `vercel` | Clean and minimal monochrome design |
 | `nature` | Calming forest greens and earthy tones |
+| `t3-chat` | A warm, chat-focused color palette |
 
 ### Theme Architecture
 

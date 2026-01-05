@@ -6,7 +6,9 @@
 
 A beautiful Tauri application for managing Git worktrees with a modern UI.
 
-![Aristar Worktrees](src/assets/readme/app-home.png)
+![Aristar Worktrees Page](src/assets/readme/app-worktree-page.png)
+![Aristar Agent Manager Page](src/assets/readme/app-agent-manager-page.png)
+
 
 > **macOS Note:** If you see "Aristar Worktrees is damaged and can't be opened", run:
 > ```bash
@@ -24,6 +26,7 @@ A beautiful Tauri application for managing Git worktrees with a modern UI.
 - **Dark/Light Theme**: Beautiful theming with system preference detection
 - **Persistent State**: Your repositories and settings are automatically saved
 - **Configurable Apps**: Choose your preferred terminal and code editor
+- **AI Agent Orchestration**: Run multiple AI agents on the same task in isolated worktrees
 
 ## Tech Stack
 
@@ -84,142 +87,22 @@ Click the gear icon in the header to configure:
 
 Supported editors: VS Code, Cursor, Zed, Antigravity, or custom command.
 
-## Project Structure
+### Themes
 
-```
-aristar-worktrees/
-├── src/                          # React frontend
-│   ├── components/               # React components
-│   │   ├── ui/                   # shadcn/ui components
-│   │   ├── create-worktree-dialog.tsx
-│   │   ├── header.tsx
-│   │   ├── rename-dialog.tsx
-│   │   ├── repository-sidebar.tsx
-│   │   ├── settings-dialog.tsx
-│   │   ├── theme-toggle.tsx
-│   │   └── worktree-card.tsx
-│   ├── lib/                      # Utilities
-│   │   ├── branch-colors.ts      # Branch color system
-│   │   ├── commands.ts           # Tauri command wrappers
-│   │   └── utils.ts              # General utilities
-│   ├── store/                    # State management
-│   │   ├── types.ts              # TypeScript types
-│   │   └── use-app-store.ts      # Zustand store
-│   ├── assets/                   # Static assets
-│   │   ├── editors/              # Editor icons
-│   │   └── terminals/            # Terminal icons
-│   ├── App.tsx                   # Main app component
-│   ├── main.tsx                  # Entry point
-│   └── index.css                 # Global styles
-├── src-tauri/                    # Rust backend
-│   ├── src/
-│   │   ├── commands/
-│   │   │   ├── mod.rs            # Tauri commands
-│   │   │   ├── worktree.rs       # Git worktree operations
-│   │   │   └── tests/            # Unit & integration tests
-│   │   ├── models/
-│   │   │   └── mod.rs            # Data models
-│   │   ├── lib.rs                # Library entry
-│   │   └── main.rs               # Application entry
-│   ├── Cargo.toml                # Rust dependencies
-│   └── tauri.conf.json           # Tauri configuration
-└── package.json                  # Frontend dependencies
-```
+| Theme | Description |
+|-------|-------------|
+| Aristar | Playful and colorful with bold shadows (default) |
+| Claude | Warm, earthy tones inspired by Anthropic Claude |
+| Vercel | Clean and minimal monochrome design |
+| Nature | Calming forest greens and earthy tones |
+| T3 Chat | A warm, chat-focused color palette |
 
-## Architecture
+Each theme supports light, dark, or system preference modes.
 
-### Frontend (React + TypeScript)
-
-The frontend uses a component-based architecture with:
-
-- **Zustand** for global state management with localStorage persistence
-- **shadcn/ui** components built on Radix UI primitives
-- **Tailwind CSS v4** for styling with CSS variables for theming
-
-### Backend (Rust + Tauri)
-
-The backend handles:
-
-- Git operations via shell commands (`git worktree`, `git branch`, etc.)
-- File system operations for worktree management
-- Opening external applications (terminals, editors, Finder)
-- Persistent storage in `~/.aristar-worktrees/store.json`
-
-### Data Flow
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  React Store    │────▶│  Tauri Commands │────▶│  Git Commands   │
-│  (Zustand)      │◀────│  (Rust)         │◀────│  (Shell)        │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-        │                        │
-        ▼                        ▼
-┌─────────────────┐     ┌─────────────────┐
-│  localStorage   │     │  ~/.aristar-    │
-│  (settings)     │     │  worktrees/     │
-└─────────────────┘     └─────────────────┘
-```
-
-## API Reference
-
-### Tauri Commands
-
-| Command | Description |
-|---------|-------------|
-| `get_repositories` | Get all stored repositories |
-| `add_repository` | Add a new Git repository |
-| `remove_repository` | Remove a repository from the app |
-| `refresh_repository` | Refresh worktree list for a repository |
-| `create_worktree` | Create a new worktree |
-| `remove_worktree` | Delete a worktree |
-| `rename_worktree` | Rename a worktree |
-| `lock_worktree` | Lock a worktree |
-| `unlock_worktree` | Unlock a worktree |
-| `get_branches` | Get all branches for a repository |
-| `get_commits` | Get recent commits for a repository |
-| `open_in_terminal` | Open path in configured terminal |
-| `open_in_editor` | Open path in configured editor |
-| `reveal_in_finder` | Reveal path in Finder |
-| `copy_to_clipboard` | Copy text to clipboard |
-
-### TypeScript Types
-
-```typescript
-interface WorktreeMetadata {
-  id: string;
-  repositoryId: string;
-  name: string;
-  path: string;
-  branch?: string;
-  commit?: string;
-  isMain: boolean;
-  isLocked: boolean;
-  lockReason?: string;
-  startupScript?: string;
-  scriptExecuted: boolean;
-  createdAt: number;
-}
-
-interface Repository {
-  id: string;
-  path: string;
-  name: string;
-  worktrees: WorktreeMetadata[];
-  lastScanned: number;
-}
-
-interface AppSettings {
-  theme: 'light' | 'dark' | 'system';
-  terminalApp: TerminalApp;
-  customTerminalCommand?: string;
-  editorApp: EditorApp;
-  customEditorCommand?: string;
-  autoRefresh: boolean;
-}
-
-type TerminalApp = 'terminal' | 'ghostty' | 'alacritty' | 'kitty' | 'iterm' | 'warp' | 'custom';
-type EditorApp = 'vscode' | 'cursor' | 'zed' | 'antigravity' | 'custom';
-```
+For detailed documentation, see:
+- [Architecture](docs/ARCHITECTURE.md)
+- [Rust Backend](src-tauri/README.md)
+- [Frontend API](src/modules/core/README.md)
 
 ## Storage Locations
 
