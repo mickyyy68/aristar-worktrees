@@ -45,9 +45,7 @@ export function Header({ onAddRepository }: HeaderProps) {
         <div className="flex items-center gap-6">
           {/* Logo and Title */}
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <FolderGit2 className="h-5 w-5 text-primary-foreground" />
-            </div>
+            <img src="/icon.png" alt="Aristar Worktrees" className="h-9 w-9" />
             <div>
               <h1 className="text-lg font-semibold">Aristar Worktrees</h1>
             </div>
