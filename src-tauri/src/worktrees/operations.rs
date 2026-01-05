@@ -630,21 +630,13 @@ pub fn create_worktree_at_path(
     // Build the git worktree add command
     let mut args = vec!["worktree", "add", destination_path];
 
-    // Add branch or commit if specified
-    if let Some(ref_name) = branch_or_commit {
-        // Check if it's a commit hash (40 chars hex) or short hash
-        let is_commit = ref_name.len() >= 7
-            && ref_name.len() <= 40
-            && ref_name.chars().all(|c| c.is_ascii_hexdigit());
+    // Always use --detach to create worktrees in detached HEAD mode.
+    // This prevents "branch already used by worktree" errors when creating
+    // multiple worktrees from the same branch (e.g., for agent tasks).
+    args.push("--detach");
 
-        if is_commit {
-            // For commits, use --detach to create a detached HEAD worktree
-            args.push("--detach");
-            args.push(ref_name);
-        } else {
-            // For branches, just add the branch name
-            args.push(ref_name);
-        }
+    if let Some(ref_name) = branch_or_commit {
+        args.push(ref_name);
     }
 
     run_git_command(&args, &repo_path_str)?;
