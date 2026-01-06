@@ -306,12 +306,6 @@ export interface OpenCodeSession {
  * Extract sessionID from any SSE event
  */
 export function extractSessionId(event: SSEEvent): string | null {
-  // Handle session.diff events which use 'data' instead of 'properties'
-  const eventWithData = event as { data?: { sessionID?: string } };
-  if (eventWithData.data?.sessionID) {
-    return eventWithData.data.sessionID;
-  }
-
   const props = event.properties as Record<string, unknown> | undefined;
   if (!props) return null;
 
