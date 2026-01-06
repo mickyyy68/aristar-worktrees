@@ -15,6 +15,7 @@ import { opencodeClient, opencodeClientManager } from '../api/opencode';
 import { commands } from '@core/lib';
 import { sseManager } from './sse-manager';
 import { useMessageStore } from './message-store';
+import { useDiffStore } from './diff-store';
 import type { Message, APIPart } from '../api/opencode-types';
 import { convertAPIPart } from '../api/opencode-types';
 
@@ -635,7 +636,10 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
           const unsubscribe = sseManager.subscribe(port, sessionId, (event) => {
             // Dispatch events to the message store
             messageStore.handleSSEEvent(agentKey, event);
-            
+
+            // Dispatch diff events to the diff store
+            useDiffStore.getState().handleSSEEvent(event);
+
             // Handle session.status for agent status updates
             if (event.type === 'session.status' || event.type === 'session.idle') {
               const status = (event.properties as { status?: { type: string } | string })?.status;
@@ -943,7 +947,8 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
               await sseManager.connect(port);
               const unsubscribe = sseManager.subscribe(port, agent.sessionId, (event) => {
                 messageStore.handleSSEEvent(agentKey, event);
-                
+                useDiffStore.getState().handleSSEEvent(event);
+
                 if (event.type === 'session.status' || event.type === 'session.idle') {
                   const status = (event.properties as { status?: { type: string } | string })?.status;
                   const statusType = typeof status === 'object' ? status?.type : status;
@@ -1136,6 +1141,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
                  if (!sseUnsubscribers.has(agentKey) && agent.sessionId) {
                    const unsubscribe = sseManager.subscribe(port, agent.sessionId, (event) => {
                      messageStore.handleSSEEvent(agentKey, event);
+                     useDiffStore.getState().handleSSEEvent(event);
                      if (event.type === 'session.status' || event.type === 'session.idle') {
                        const status = (event.properties as { status?: { type: string } | string })?.status;
                        const statusType = typeof status === 'object' ? status?.type : status;
@@ -1188,6 +1194,7 @@ export const useAgentManagerStore = create<AgentManagerStore>()(
              if (!sseUnsubscribers.has(agentKey) && agent.sessionId) {
                const unsubscribe = sseManager.subscribe(port, agent.sessionId, (event) => {
                  messageStore.handleSSEEvent(agentKey, event);
+                 useDiffStore.getState().handleSSEEvent(event);
                  if (event.type === 'session.status' || event.type === 'session.idle') {
                    const status = (event.properties as { status?: { type: string } | string })?.status;
                    const statusType = typeof status === 'object' ? status?.type : status;
