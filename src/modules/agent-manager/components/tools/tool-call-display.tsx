@@ -4,6 +4,9 @@ import { cn } from '@core/lib/utils';
 import { useAppStore } from '@/store/use-app-store';
 import { getToolConfig, getToolLabel } from './tool-config';
 import type { ToolInvocationPart } from '../../api/opencode-types';
+import { useDiffStore } from '../../store/diff-store';
+import { useAgentManagerStore } from '../../store/agent-manager-store';
+import { DiffViewer } from './diff-viewer';
 
 interface ToolCallDisplayProps {
   toolCall: ToolInvocationPart;
@@ -117,6 +120,21 @@ export function ToolCallDisplay({ toolCall, defaultExpanded }: ToolCallDisplayPr
 
   const toolConfig = useMemo(() => getToolConfig(toolCall.toolName), [toolCall.toolName]);
   const toolLabel = useMemo(() => getToolLabel(toolCall.toolName), [toolCall.toolName]);
+
+  // Get session ID for diff lookup
+  const { activeTaskId, tasks, activeAgentId } = useAgentManagerStore();
+  const activeTask = tasks.find((t) => t.id === activeTaskId);
+  const activeAgent = activeTask?.agents.find((a) => a.id === activeAgentId);
+  const sessionId = activeAgent?.sessionId;
+
+  // Check if this is an Edit/Write tool and get diff if available
+  const isFileEditTool = ['edit', 'write'].includes(toolCall.toolName.toLowerCase());
+  const filePath = (toolCall.args as ToolArgs)?.filePath;
+
+  const diff = useDiffStore((state) => {
+    if (!isFileEditTool || !sessionId || !filePath) return null;
+    return state.getDiffForFile(sessionId, filePath);
+  });
 
   const args = toolCall.args as ToolArgs | undefined;
   const description = getToolDescription(toolCall.toolName, args);
@@ -242,6 +260,14 @@ export function ToolCallDisplay({ toolCall, defaultExpanded }: ToolCallDisplayPr
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Diff viewer for file edit tools */}
+          {diff && (
+            <div>
+              <div className="mb-1 text-xs font-medium text-muted-foreground">Changes</div>
+              <DiffViewer diff={diff} />
             </div>
           )}
         </div>

@@ -156,6 +156,30 @@ export interface SessionIdleEvent extends SSEEvent {
   };
 }
 
+// ============ Session Diff Types ============
+
+/**
+ * Single file diff entry from session.diff event
+ */
+export interface FileDiff {
+  file: string;
+  before: string;
+  after: string;
+  additions: number;
+  deletions: number;
+}
+
+/**
+ * Session diff event - sent when files are modified
+ */
+export interface SessionDiffEvent extends SSEEvent {
+  type: 'session.diff';
+  properties: {
+    sessionID: string;
+    diff: FileDiff[];
+  };
+}
+
 /**
  * Union of all known SSE event types
  */
@@ -166,6 +190,7 @@ export type OpenCodeSSEEvent =
   | MessagePartUpdatedEvent
   | SessionStatusEvent
   | SessionIdleEvent
+  | SessionDiffEvent
   | SSEEvent; // Fallback for unknown events
 
 // ============ Message Part Types (API format) ============
@@ -281,6 +306,12 @@ export interface OpenCodeSession {
  * Extract sessionID from any SSE event
  */
 export function extractSessionId(event: SSEEvent): string | null {
+  // Handle session.diff events which use 'data' instead of 'properties'
+  const eventWithData = event as { data?: { sessionID?: string } };
+  if (eventWithData.data?.sessionID) {
+    return eventWithData.data.sessionID;
+  }
+
   const props = event.properties as Record<string, unknown> | undefined;
   if (!props) return null;
 
